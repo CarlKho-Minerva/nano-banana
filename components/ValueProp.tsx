@@ -8,7 +8,7 @@ import BeforeAfter from './BeforeAfter';
 
 const ValueProp: React.FC = () => {
   const [currentDemo, setCurrentDemo] = useState(0);
-  
+
   const demos = [
     {
       before: '/assets/before-after/1/before -  alicia-steels-5AxRCxe_fa0-unsplash.jpg',
@@ -49,13 +49,13 @@ const ValueProp: React.FC = () => {
       {/* Demo Slideshow - Full Focus */}
       <div className="w-full max-w-sm sm:max-w-md lg:max-w-lg mx-auto lg:mx-0">
         <div className="w-full aspect-[4/3] sm:aspect-[3/2] lg:aspect-[4/3] border border-white/20 rounded-xl lg:rounded-2xl overflow-hidden shadow-2xl">
-          <BeforeAfter 
-            beforeSrc={demos[currentDemo].after} 
-            afterSrc={demos[currentDemo].before} 
+          <BeforeAfter
+            beforeSrc={demos[currentDemo].after}
+            afterSrc={demos[currentDemo].before}
             alt={demos[currentDemo].description}
           />
         </div>
-        
+
         <div className="flex justify-center gap-2 sm:gap-3 mt-4 sm:mt-6">
           {demos.map((_, index) => (
             <button
@@ -67,20 +67,20 @@ const ValueProp: React.FC = () => {
             />
           ))}
         </div>
-        
+
         <div className="text-center mt-3 sm:mt-4 md:mt-6">
           <p className="text-gray-400 text-sm sm:text-base lg:text-lg font-light mb-2 sm:mb-3 md:mb-4">
             {demos[currentDemo].description}
           </p>
-          
+
           <div className="text-left max-w-xs sm:max-w-sm lg:max-w-md mx-auto">
             <p className="text-gray-500 text-xs font-light mb-2 sm:mb-3">
               Magic Eraser, Unblur, Best Take — previously Google Pixel exclusive
             </p>
-            
+
             <blockquote className="border-l border-white/20 pl-3 sm:pl-4">
               <p className="text-gray-400 italic text-xs sm:text-sm lg:text-base font-light leading-relaxed">
-                "I used to think this was just a Google Pixel feature. 
+                "I used to think this was just a Google Pixel feature.
                 Now I can edit any photo like this."
               </p>
               <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-white/10">

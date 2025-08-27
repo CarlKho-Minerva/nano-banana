@@ -120,12 +120,82 @@ class RateLimiter {
 
 export const apiRateLimiter = new RateLimiter(10, 60000); // 10 requests per minute
 
-// Secure localStorage wrapper
+// Session management for enhanced security
+export const sessionManager = {
+  generateSessionId: (): string => {
+    return Math.random().toString(36).substring(2) + Date.now().toString(36);
+  },
+  
+  initializeSession: (): void => {
+    const existingSession = secureStorage.getItem('sessionId');
+    if (!existingSession) {
+      const sessionId = sessionManager.generateSessionId();
+      secureStorage.setItem('sessionId', sessionId, 480); // 8 hours session
+    }
+    
+    // Set last activity timestamp
+    secureStorage.setItem('lastActivity', Date.now(), 480);
+  },
+  
+  updateActivity: (): void => {
+    secureStorage.setItem('lastActivity', Date.now(), 480);
+  },
+  
+  isSessionValid: (): boolean => {
+    const sessionId = secureStorage.getItem('sessionId');
+    const lastActivity = secureStorage.getItem('lastActivity');
+    const now = Date.now();
+    
+    if (!sessionId || !lastActivity) return false;
+    
+    // Session expires after 30 minutes of inactivity
+    const INACTIVITY_TIMEOUT = 30 * 60 * 1000;
+    return (now - lastActivity) < INACTIVITY_TIMEOUT;
+  },
+  
+  clearSession: (): void => {
+    secureStorage.removeItem('sessionId');
+    secureStorage.removeItem('lastActivity');
+    secureStorage.clear(); // Clear all app data
+  }
+};
+
+// Simple XOR-based obfuscation for client-side data
+// NOTE: This is obfuscation, not encryption - do not store truly sensitive data
+const simpleObfuscate = (data: string): string => {
+  const key = 'NanoBananaSecure2024'; // Static key for obfuscation
+  let result = '';
+  for (let i = 0; i < data.length; i++) {
+    result += String.fromCharCode(data.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+  }
+  return btoa(result);
+};
+
+const simpleDeobfuscate = (obfuscated: string): string => {
+  try {
+    const data = atob(obfuscated);
+    const key = 'NanoBananaSecure2024';
+    let result = '';
+    for (let i = 0; i < data.length; i++) {
+      result += String.fromCharCode(data.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+    }
+    return result;
+  } catch {
+    return '';
+  }
+};
+
+// Enhanced localStorage wrapper with expiration and better obfuscation
 export const secureStorage = {
-  setItem: (key: string, value: any): void => {
+  setItem: (key: string, value: any, expirationMinutes?: number): void => {
     try {
-      const encrypted = btoa(JSON.stringify(value)); // Basic encoding (not secure encryption)
-      localStorage.setItem(key, encrypted);
+      const data = {
+        value,
+        timestamp: Date.now(),
+        expires: expirationMinutes ? Date.now() + (expirationMinutes * 60 * 1000) : null
+      };
+      const obfuscated = simpleObfuscate(JSON.stringify(data));
+      localStorage.setItem(`nb_${key}`, obfuscated);
     } catch (error) {
       console.warn('Failed to store data securely:', error);
     }
@@ -133,20 +203,64 @@ export const secureStorage = {
   
   getItem: (key: string): any => {
     try {
-      const encrypted = localStorage.getItem(key);
-      if (!encrypted) return null;
-      return JSON.parse(atob(encrypted));
+      const obfuscated = localStorage.getItem(`nb_${key}`);
+      if (!obfuscated) return null;
+      
+      const dataStr = simpleDeobfuscate(obfuscated);
+      if (!dataStr) return null;
+      
+      const data = JSON.parse(dataStr);
+      
+      // Check expiration
+      if (data.expires && Date.now() > data.expires) {
+        localStorage.removeItem(`nb_${key}`);
+        return null;
+      }
+      
+      return data.value;
     } catch (error) {
       console.warn('Failed to retrieve data securely:', error);
+      // Clean up corrupted data
+      localStorage.removeItem(`nb_${key}`);
       return null;
     }
   },
   
   removeItem: (key: string): void => {
-    localStorage.removeItem(key);
+    localStorage.removeItem(`nb_${key}`);
   },
   
   clear: (): void => {
-    localStorage.clear();
+    // Only clear our prefixed items
+    const keys = Object.keys(localStorage);
+    keys.forEach(key => {
+      if (key.startsWith('nb_')) {
+        localStorage.removeItem(key);
+      }
+    });
+  },
+  
+  // Clean expired items
+  cleanExpired: (): void => {
+    const keys = Object.keys(localStorage);
+    keys.forEach(key => {
+      if (key.startsWith('nb_')) {
+        try {
+          const obfuscated = localStorage.getItem(key);
+          if (obfuscated) {
+            const dataStr = simpleDeobfuscate(obfuscated);
+            if (dataStr) {
+              const data = JSON.parse(dataStr);
+              if (data.expires && Date.now() > data.expires) {
+                localStorage.removeItem(key);
+              }
+            }
+          }
+        } catch {
+          // Remove corrupted data
+          localStorage.removeItem(key);
+        }
+      }
+    });
   }
 };

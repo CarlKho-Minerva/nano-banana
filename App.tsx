@@ -15,7 +15,7 @@ import { UndoIcon, RedoIcon, EyeIcon } from './components/icons';
 import StartScreen from './components/StartScreen';
 import ValueProp from './components/ValueProp';
 import BeforeAfter from './components/BeforeAfter';
-import { sanitizePrompt, apiRateLimiter, secureStorage } from './utils/security';
+import { sanitizePrompt, apiRateLimiter, secureStorage, sessionManager } from './utils/security';
 
 // Helper to convert a data URL string to a File object
 const dataURLtoFile = (dataurl: string, filename: string): File => {
@@ -45,13 +45,24 @@ const App: React.FC = () => {
   const [editHotspot, setEditHotspot] = useState<{ x: number, y: number } | null>(null);
   const [displayHotspot, setDisplayHotspot] = useState<{ x: number, y: number } | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('retouch');
-  
+
   const [crop, setCrop] = useState<Crop>();
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
   const [aspect, setAspect] = useState<number | undefined>();
   const [isComparing, setIsComparing] = useState<boolean>(false);
   const [showBeforeAfter, setShowBeforeAfter] = useState<boolean>(false);
   const [creditsRemaining, setCreditsRemaining] = useState<number>(() => {
+    // Initialize session and clean expired storage items on app start
+    sessionManager.initializeSession();
+    secureStorage.cleanExpired();
+    
+    // Validate session and reset credits if session is invalid
+    if (!sessionManager.isSessionValid()) {
+      sessionManager.clearSession();
+      sessionManager.initializeSession();
+      return 3; // Reset to 3 free credits for new session
+    }
+    
     const saved = secureStorage.getItem('creditsRemaining');
     return saved ? parseInt(saved) : 3; // 3 free credits to start
   });
@@ -73,7 +84,7 @@ const App: React.FC = () => {
       setCurrentImageUrl(null);
     }
   }, [currentImage]);
-  
+
   // Effect to create and revoke object URLs safely for the original image
   useEffect(() => {
     if (originalImage) {
@@ -115,7 +126,17 @@ const App: React.FC = () => {
       setError('No image loaded to edit.');
       return;
     }
+
+    // Update session activity
+    sessionManager.updateActivity();
     
+    // Validate session
+    if (!sessionManager.isSessionValid()) {
+      sessionManager.clearSession();
+      setError('Session expired. Please refresh the page.');
+      return;
+    }
+
     // Sanitize user input
     const sanitizedPrompt = sanitizePrompt(prompt);
     if (!sanitizedPrompt.trim()) {
@@ -142,17 +163,17 @@ const App: React.FC = () => {
 
     setIsLoading(true);
     setError(null);
-    
+
     try {
         const editedImageUrl = await generateEditedImage(currentImage, sanitizedPrompt, editHotspot);
         const newImageFile = dataURLtoFile(editedImageUrl, `edited-${Date.now()}.png`);
         addImageToHistory(newImageFile);
-        
-        // Deduct credit and save to secure storage
+
+        // Deduct credit and save to secure storage with 24-hour expiration
         const newCredits = creditsRemaining - 1;
         setCreditsRemaining(newCredits);
-        secureStorage.setItem('creditsRemaining', newCredits);
-        
+        secureStorage.setItem('creditsRemaining', newCredits, 1440); // Expires in 24 hours
+
         setEditHotspot(null);
         setDisplayHotspot(null);
         setPrompt('');
@@ -164,16 +185,16 @@ const App: React.FC = () => {
         setIsLoading(false);
     }
   }, [currentImage, prompt, editHotspot, addImageToHistory]);
-  
+
   const handleApplyFilter = useCallback(async (filterPrompt: string) => {
     if (!currentImage) {
       setError('No image loaded to apply a filter to.');
       return;
     }
-    
+
     setIsLoading(true);
     setError(null);
-    
+
     try {
         const filteredImageUrl = await generateFilteredImage(currentImage, filterPrompt);
         const newImageFile = dataURLtoFile(filteredImageUrl, `filtered-${Date.now()}.png`);
@@ -186,16 +207,16 @@ const App: React.FC = () => {
         setIsLoading(false);
     }
   }, [currentImage, addImageToHistory]);
-  
+
   const handleApplyAdjustment = useCallback(async (adjustmentPrompt: string) => {
     if (!currentImage) {
       setError('No image loaded to apply an adjustment to.');
       return;
     }
-    
+
     setIsLoading(true);
     setError(null);
-    
+
     try {
         const adjustedImageUrl = await generateAdjustedImage(currentImage, adjustmentPrompt);
         const newImageFile = dataURLtoFile(adjustedImageUrl, `adjusted-${Date.now()}.png`);
@@ -219,7 +240,7 @@ const App: React.FC = () => {
     const canvas = document.createElement('canvas');
     const scaleX = image.naturalWidth / image.width;
     const scaleY = image.naturalHeight / image.height;
-    
+
     canvas.width = completedCrop.width;
     canvas.height = completedCrop.height;
     const ctx = canvas.getContext('2d');
@@ -246,7 +267,7 @@ const App: React.FC = () => {
       completedCrop.width,
       completedCrop.height,
     );
-    
+
     const croppedImageUrl = canvas.toDataURL('image/png');
     const newImageFile = dataURLtoFile(croppedImageUrl, `cropped-${Date.now()}.png`);
     addImageToHistory(newImageFile);
@@ -260,7 +281,7 @@ const App: React.FC = () => {
       setDisplayHotspot(null);
     }
   }, [canUndo, historyIndex]);
-  
+
   const handleRedo = useCallback(() => {
     if (canRedo) {
       setHistoryIndex(historyIndex + 1);
@@ -298,7 +319,7 @@ const App: React.FC = () => {
           URL.revokeObjectURL(link.href);
       }
   }, [currentImage]);
-  
+
   const handleFileSelect = (files: FileList | null) => {
     if (files && files[0]) {
       handleImageUpload(files[0]);
@@ -307,23 +328,23 @@ const App: React.FC = () => {
 
   const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
     if (activeTab !== 'retouch') return;
-    
+
     // Disable before/after view when making new edits
     if (showBeforeAfter) {
       setShowBeforeAfter(false);
     }
-    
+
     const img = e.currentTarget;
     const rect = img.getBoundingClientRect();
-    
+
     // Get click position relative to the visible image bounds
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    
+
     // Store display position as percentage of image element
     const displayX = (x / rect.width) * 100;
     const displayY = (y / rect.height) * 100;
-    
+
     setDisplayHotspot({ x: displayX, y: displayY });
 
     // Calculate coordinates for API using natural image dimensions
@@ -354,16 +375,16 @@ const App: React.FC = () => {
            </div>
         );
     }
-    
+
     if (!currentImageUrl) {
       return <StartScreen onFileSelect={handleFileSelect} />;
     }
 
     const imageDisplay = showBeforeAfter && originalImageUrl && currentImageUrl && historyIndex > 0 ? (
       <div className="w-full h-[70vh]">
-        <BeforeAfter 
-          beforeSrc={originalImageUrl} 
-          afterSrc={currentImageUrl} 
+        <BeforeAfter
+          beforeSrc={originalImageUrl}
+          afterSrc={currentImageUrl}
           alt="Photo edit comparison"
         />
       </div>
@@ -389,13 +410,13 @@ const App: React.FC = () => {
         />
       </div>
     );
-    
+
     // For ReactCrop, we need a single image element. We'll use the current one.
     const cropImageElement = (
-      <img 
+      <img
         ref={imgRef}
         key={`crop-${currentImageUrl}`}
-        src={currentImageUrl} 
+        src={currentImageUrl}
         alt="Crop this image"
         className="w-full h-auto object-contain max-h-[70vh] rounded-xl"
       />
@@ -411,11 +432,11 @@ const App: React.FC = () => {
                     <p className="text-gray-300">AI is working its magic...</p>
                 </div>
             )}
-            
+
             {activeTab === 'crop' ? (
-              <ReactCrop 
-                crop={crop} 
-                onChange={c => setCrop(c)} 
+              <ReactCrop
+                crop={crop}
+                onChange={c => setCrop(c)}
                 onComplete={c => setCompletedCrop(c)}
                 aspect={aspect}
                 className="max-h-full"
@@ -425,10 +446,10 @@ const App: React.FC = () => {
             ) : imageDisplay }
 
             {displayHotspot && !isLoading && activeTab === 'retouch' && (
-                <div 
+                <div
                     className="absolute rounded-full w-6 h-6 bg-white/50 border-2 border-white pointer-events-none z-10"
-                    style={{ 
-                      left: `${displayHotspot.x}%`, 
+                    style={{
+                      left: `${displayHotspot.x}%`,
                       top: `${displayHotspot.y}%`,
                       transform: 'translate(-50%, -50%)'
                     }}
@@ -437,15 +458,15 @@ const App: React.FC = () => {
                 </div>
             )}
         </div>
-        
+
         <div className="border border-white/20 rounded-lg p-2 flex items-center justify-center gap-2 backdrop-blur-sm">
             {(['retouch', 'crop', 'adjust', 'filters'] as Tab[]).map(tab => (
                  <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
                     className={`w-full capitalize font-semibold py-3 px-5 rounded-md transition-all duration-200 text-base ${
-                        activeTab === tab 
-                        ? 'bg-white text-black' 
+                        activeTab === tab
+                        ? 'bg-white text-black'
                         : 'text-white hover:bg-white/10'
                     }`}
                 >
@@ -453,7 +474,7 @@ const App: React.FC = () => {
                 </button>
             ))}
         </div>
-        
+
         <div className="space-y-4">
             {activeTab === 'retouch' && (
                 <div className="flex flex-col gap-4">
@@ -466,9 +487,9 @@ const App: React.FC = () => {
                                 {creditsRemaining} credits remaining
                             </p>
                             {creditsRemaining <= 0 && (
-                                <a 
-                                    href="https://tally.so/r/w4jbJM" 
-                                    target="_blank" 
+                                <a
+                                    href="https://tally.so/r/w4jbJM"
+                                    target="_blank"
                                     rel="noopener noreferrer"
                                     className="bg-white text-black px-4 py-2 rounded text-sm font-medium hover:bg-gray-200 transition-colors"
                                 >
@@ -486,7 +507,7 @@ const App: React.FC = () => {
                             className="flex-grow border border-white/20 text-white rounded-lg p-4 text-lg focus:ring-2 focus:ring-white focus:outline-none transition disabled:cursor-not-allowed disabled:opacity-60 bg-white/5"
                             disabled={isLoading || !editHotspot}
                         />
-                        <button 
+                        <button
                             type="submit"
                             className="bg-white text-black font-bold py-4 px-6 text-lg rounded-lg transition-all duration-200 hover:bg-gray-200 active:scale-95 disabled:bg-gray-500 disabled:cursor-not-allowed"
                             disabled={isLoading || !prompt.trim() || !editHotspot}
@@ -500,9 +521,9 @@ const App: React.FC = () => {
             {activeTab === 'adjust' && <AdjustmentPanel onApplyAdjustment={handleApplyAdjustment} isLoading={isLoading} />}
             {activeTab === 'filters' && <FilterPanel onApplyFilter={handleApplyFilter} isLoading={isLoading} />}
         </div>
-        
+
         <div className="flex flex-wrap items-center justify-center gap-2">
-            <button 
+            <button
                 onClick={handleUndo}
                 disabled={!canUndo}
                 className="flex items-center justify-center bg-white/10 border border-white/20 text-gray-200 font-semibold py-2 px-4 rounded-md transition-all duration-200 ease-in-out hover:bg-white/20 hover:border-white/30 active:scale-95 text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-white/5"
@@ -511,7 +532,7 @@ const App: React.FC = () => {
                 <UndoIcon className="w-4 h-4 mr-1" />
                 Undo
             </button>
-            <button 
+            <button
                 onClick={handleRedo}
                 disabled={!canRedo}
                 className="flex items-center justify-center bg-white/10 border border-white/20 text-gray-200 font-semibold py-2 px-4 rounded-md transition-all duration-200 ease-in-out hover:bg-white/20 hover:border-white/30 active:scale-95 text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-white/5"
@@ -523,7 +544,7 @@ const App: React.FC = () => {
 
             {canUndo && (
               <>
-                <button 
+                <button
                     onClick={() => {
                       setShowBeforeAfter(!showBeforeAfter);
                       if (!showBeforeAfter) {
@@ -539,7 +560,7 @@ const App: React.FC = () => {
                     <EyeIcon className="w-4 h-4 mr-1" />
                     Before/After
                 </button>
-                <button 
+                <button
                     onMouseDown={() => setIsComparing(true)}
                     onMouseUp={() => setIsComparing(false)}
                     onMouseLeave={() => setIsComparing(false)}
@@ -554,21 +575,21 @@ const App: React.FC = () => {
               </>
             )}
 
-            <button 
+            <button
                 onClick={handleReset}
                 disabled={!canUndo}
                 className="bg-transparent border border-white/20 text-gray-200 font-semibold py-2 px-4 rounded-md transition-all duration-200 ease-in-out hover:bg-white/10 hover:border-white/30 active:scale-95 text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-transparent"
               >
                 Reset
             </button>
-            <button 
+            <button
                 onClick={handleUploadNew}
                 className="bg-white/10 border border-white/20 text-gray-200 font-semibold py-2 px-4 rounded-md transition-all duration-200 ease-in-out hover:bg-white/20 hover:border-white/30 active:scale-95 text-sm"
             >
                 Upload New
             </button>
 
-            <button 
+            <button
                 onClick={handleDownload}
                 className="bg-white text-black font-bold py-2 px-4 rounded-md transition-all duration-200 hover:bg-gray-200 active:scale-95 text-sm"
             >
@@ -578,7 +599,7 @@ const App: React.FC = () => {
       </div>
     );
   };
-  
+
   return (
     <div className="min-h-screen text-gray-100">
       <div className="min-h-screen flex flex-col lg:flex-row overflow-x-hidden">
@@ -587,19 +608,9 @@ const App: React.FC = () => {
           {renderEditor()}
           {!currentImage && (
             <div className="mt-4 sm:mt-6 md:mt-8 px-4 sm:px-6 md:px-8 lg:px-10 pb-4 sm:pb-6">
-              <div className="max-w-sm sm:max-w-md lg:max-w-lg mx-auto text-center">
-                <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4">See the Magic in Action</h3>
-                <div className="border border-white/20 rounded-lg sm:rounded-xl overflow-hidden">
-                  <BeforeAfter 
-                    beforeSrc="/assets/before-after/1/after -  alicia-steels-5AxRCxe_fa0-unsplash.jpeg" 
-                    afterSrc="/assets/before-after/1/before -  alicia-steels-5AxRCxe_fa0-unsplash.jpg" 
-                    alt="Demo: Remove unwanted objects"
-                  />
-                </div>
-                <p className="text-gray-400 text-xs mt-2 sm:mt-3 font-light px-2">
+              <p className="text-gray-400 text-xs mt-2 sm:mt-3 font-light px-2">
                   Made with love by <a href="https://x.com/SegueEMR" target="_blank" rel="noopener noreferrer" className="text-white hover:text-gray-300 transition-colors">@pxl_buildr</a> • Powered by Gemini NanoBanana 2.5 Flash Image
                 </p>
-              </div>
             </div>
           )}
         </div>
