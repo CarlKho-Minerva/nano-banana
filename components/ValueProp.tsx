@@ -45,10 +45,10 @@ const ValueProp: React.FC = () => {
   }, [demos.length]);
 
   return (
-    <div className="w-full lg:w-1/2 min-h-screen px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 py-6 sm:py-8 md:py-12 flex flex-col justify-center lg:border-r border-white/10">
+    <div className="w-full lg:w-1/2 h-screen px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-6 md:py-8 flex flex-col justify-center lg:border-r border-white/10 overflow-hidden">
       {/* Demo Slideshow - Full Focus */}
-      <div className="w-full max-w-xl lg:max-w-2xl mx-auto lg:mx-0">
-        <div className="w-full aspect-[4/3] sm:aspect-[16/10] md:aspect-[4/3] lg:aspect-[16/10] border border-white/20 rounded-2xl lg:rounded-3xl overflow-hidden shadow-2xl">
+      <div className="w-full max-w-sm sm:max-w-md lg:max-w-lg mx-auto lg:mx-0">
+        <div className="w-full aspect-[4/3] sm:aspect-[3/2] lg:aspect-[4/3] border border-white/20 rounded-xl lg:rounded-2xl overflow-hidden shadow-2xl">
           <BeforeAfter 
             beforeSrc={demos[currentDemo].after} 
             afterSrc={demos[currentDemo].before} 
@@ -56,35 +56,35 @@ const ValueProp: React.FC = () => {
           />
         </div>
         
-        <div className="flex justify-center gap-4 mt-8">
+        <div className="flex justify-center gap-2 sm:gap-3 mt-4 sm:mt-6">
           {demos.map((_, index) => (
             <button
               key={index}
               onClick={() => setCurrentDemo(index)}
-              className={`w-4 h-4 rounded-full transition-all duration-300 ${
+              className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full transition-all duration-300 ${
                 index === currentDemo ? 'bg-white scale-125' : 'bg-white/30 hover:bg-white/60'
               }`}
             />
           ))}
         </div>
         
-        <div className="text-center mt-4 sm:mt-6 md:mt-8">
-          <p className="text-gray-400 text-base sm:text-lg md:text-xl font-light mb-4 sm:mb-6">
+        <div className="text-center mt-3 sm:mt-4 md:mt-6">
+          <p className="text-gray-400 text-sm sm:text-base lg:text-lg font-light mb-2 sm:mb-3 md:mb-4">
             {demos[currentDemo].description}
           </p>
           
-          <div className="text-left max-w-sm sm:max-w-md lg:max-w-lg mx-auto">
-            <p className="text-gray-500 text-xs sm:text-sm font-light mb-3 sm:mb-4">
+          <div className="text-left max-w-xs sm:max-w-sm lg:max-w-md mx-auto">
+            <p className="text-gray-500 text-xs font-light mb-2 sm:mb-3">
               Magic Eraser, Unblur, Best Take — previously Google Pixel exclusive
             </p>
             
-            <blockquote className="border-l border-white/20 pl-4 sm:pl-6">
-              <p className="text-gray-400 italic text-sm sm:text-base md:text-lg font-light leading-relaxed">
+            <blockquote className="border-l border-white/20 pl-3 sm:pl-4">
+              <p className="text-gray-400 italic text-xs sm:text-sm lg:text-base font-light leading-relaxed">
                 "I used to think this was just a Google Pixel feature. 
                 Now I can edit any photo like this."
               </p>
-              <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-white/10">
-                <p className="text-gray-500 text-xs sm:text-sm font-light">
+              <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-white/10">
+                <p className="text-gray-500 text-xs font-light">
                   Try 3 edits free • More with credits
                 </p>
               </div>
