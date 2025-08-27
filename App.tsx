@@ -15,6 +15,7 @@ import { UndoIcon, RedoIcon, EyeIcon } from './components/icons';
 import StartScreen from './components/StartScreen';
 import ValueProp from './components/ValueProp';
 import BeforeAfter from './components/BeforeAfter';
+import { sanitizePrompt, apiRateLimiter, secureStorage } from './utils/security';
 
 // Helper to convert a data URL string to a File object
 const dataURLtoFile = (dataurl: string, filename: string): File => {
@@ -51,7 +52,7 @@ const App: React.FC = () => {
   const [isComparing, setIsComparing] = useState<boolean>(false);
   const [showBeforeAfter, setShowBeforeAfter] = useState<boolean>(false);
   const [creditsRemaining, setCreditsRemaining] = useState<number>(() => {
-    const saved = localStorage.getItem('creditsRemaining');
+    const saved = secureStorage.getItem('creditsRemaining');
     return saved ? parseInt(saved) : 3; // 3 free credits to start
   });
   const imgRef = useRef<HTMLImageElement>(null);
@@ -115,14 +116,22 @@ const App: React.FC = () => {
       return;
     }
     
-    if (!prompt.trim()) {
-        setError('Please enter a description for your edit.');
+    // Sanitize user input
+    const sanitizedPrompt = sanitizePrompt(prompt);
+    if (!sanitizedPrompt.trim()) {
+        setError('Please enter a valid description for your edit.');
         return;
     }
 
     if (!editHotspot) {
         setError('Please click on the image to select an area to edit.');
         return;
+    }
+
+    // Check rate limiting
+    if (!apiRateLimiter.isAllowed('user')) {
+      setError('Too many requests. Please wait a moment before trying again.');
+      return;
     }
 
     // Check credits before generating
@@ -135,14 +144,14 @@ const App: React.FC = () => {
     setError(null);
     
     try {
-        const editedImageUrl = await generateEditedImage(currentImage, prompt, editHotspot);
+        const editedImageUrl = await generateEditedImage(currentImage, sanitizedPrompt, editHotspot);
         const newImageFile = dataURLtoFile(editedImageUrl, `edited-${Date.now()}.png`);
         addImageToHistory(newImageFile);
         
-        // Deduct credit and save to localStorage
+        // Deduct credit and save to secure storage
         const newCredits = creditsRemaining - 1;
         setCreditsRemaining(newCredits);
-        localStorage.setItem('creditsRemaining', newCredits.toString());
+        secureStorage.setItem('creditsRemaining', newCredits);
         
         setEditHotspot(null);
         setDisplayHotspot(null);
@@ -366,7 +375,7 @@ const App: React.FC = () => {
                 key={originalImageUrl}
                 src={originalImageUrl}
                 alt="Original"
-                className="w-full h-auto object-contain max-h-[70vh] rounded-xl pointer-events-none"
+                className="w-full h-auto object-contain max-h-full rounded-lg md:rounded-xl pointer-events-none"
             />
         )}
         {/* The current image is an overlay that fades in/out for comparison */}
@@ -376,7 +385,7 @@ const App: React.FC = () => {
             src={currentImageUrl}
             alt="Current"
             onClick={handleImageClick}
-            className={`absolute top-0 left-0 w-full h-auto object-contain max-h-[70vh] rounded-xl transition-opacity duration-200 ease-in-out ${isComparing ? 'opacity-0' : 'opacity-100'} ${activeTab === 'retouch' ? 'cursor-crosshair' : 'cursor-pointer'}`}
+            className={`absolute top-0 left-0 w-full h-auto object-contain max-h-full rounded-lg md:rounded-xl transition-opacity duration-200 ease-in-out ${isComparing ? 'opacity-0' : 'opacity-100'} ${activeTab === 'retouch' ? 'cursor-crosshair' : 'cursor-pointer'}`}
         />
       </div>
     );
@@ -394,8 +403,8 @@ const App: React.FC = () => {
 
 
     return (
-      <div className="h-full flex flex-col p-4 md:p-6 lg:p-8 gap-4 md:gap-6">
-        <div className="relative flex-1 shadow-2xl rounded-xl overflow-hidden border border-white/10 flex items-center justify-center">
+      <div className="h-screen flex flex-col p-2 sm:p-3 md:p-4 gap-2 sm:gap-3 md:gap-4">
+        <div className="relative flex-1 min-h-0 shadow-2xl rounded-lg md:rounded-xl overflow-hidden border border-white/10 flex items-center justify-center">
             {isLoading && (
                 <div className="absolute inset-0 bg-black/70 z-30 flex flex-col items-center justify-center gap-4 animate-fade-in">
                     <Spinner />
@@ -409,7 +418,7 @@ const App: React.FC = () => {
                 onChange={c => setCrop(c)} 
                 onComplete={c => setCompletedCrop(c)}
                 aspect={aspect}
-                className="max-h-[70vh]"
+                className="max-h-full"
               >
                 {cropImageElement}
               </ReactCrop>
@@ -577,18 +586,18 @@ const App: React.FC = () => {
         <div className={`${!currentImage ? 'w-full lg:w-1/2' : 'w-full'} flex-1`}>
           {renderEditor()}
           {!currentImage && (
-            <div className="mt-6 sm:mt-8 md:mt-12 px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 pb-6 sm:pb-8">
-              <div className="max-w-lg sm:max-w-xl lg:max-w-2xl mx-auto text-center">
-                <h3 className="text-lg sm:text-xl font-semibold text-white mb-4 sm:mb-6">See the Magic in Action</h3>
-                <div className="border border-white/20 rounded-lg sm:rounded-xl lg:rounded-2xl overflow-hidden">
+            <div className="mt-4 sm:mt-6 md:mt-8 px-4 sm:px-6 md:px-8 lg:px-10 pb-4 sm:pb-6">
+              <div className="max-w-sm sm:max-w-md lg:max-w-lg mx-auto text-center">
+                <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4">See the Magic in Action</h3>
+                <div className="border border-white/20 rounded-lg sm:rounded-xl overflow-hidden">
                   <BeforeAfter 
                     beforeSrc="/assets/before-after/1/after -  alicia-steels-5AxRCxe_fa0-unsplash.jpeg" 
                     afterSrc="/assets/before-after/1/before -  alicia-steels-5AxRCxe_fa0-unsplash.jpg" 
                     alt="Demo: Remove unwanted objects"
                   />
                 </div>
-                <p className="text-gray-400 text-xs sm:text-sm mt-3 sm:mt-4 font-light px-2">
-                  Made with love • Powered by Gemini NanoBanana 2.5 Flash Image
+                <p className="text-gray-400 text-xs mt-2 sm:mt-3 font-light px-2">
+                  Made with love by <a href="https://x.com/SegueEMR" target="_blank" rel="noopener noreferrer" className="text-white hover:text-gray-300 transition-colors">@pxl_buildr</a> • Powered by Gemini NanoBanana 2.5 Flash Image
                 </p>
               </div>
             </div>
