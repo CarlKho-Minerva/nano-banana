@@ -14,11 +14,12 @@ interface BeforeAfterProps {
 const BeforeAfter: React.FC<BeforeAfterProps> = ({ beforeSrc, afterSrc, alt = "Before and after comparison" }) => {
   const [sliderPosition, setSliderPosition] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
+  const containerRef = React.useRef<HTMLDivElement>(null);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isDragging) return;
+    if (!isDragging || !containerRef.current) return;
     
-    const rect = e.currentTarget.getBoundingClientRect();
+    const rect = containerRef.current.getBoundingClientRect();
     const position = ((e.clientX - rect.left) / rect.width) * 100;
     setSliderPosition(Math.max(0, Math.min(100, position)));
   };
@@ -45,29 +46,33 @@ const BeforeAfter: React.FC<BeforeAfterProps> = ({ beforeSrc, afterSrc, alt = "B
 
   return (
     <div 
-      className="relative w-full h-full select-none cursor-col-resize rounded-xl overflow-hidden"
+      ref={containerRef}
+      className="relative select-none cursor-col-resize rounded-xl overflow-hidden inline-block max-w-full max-h-full"
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
     >
-      {/* Before Image (Full) */}
-      <img 
-        src={beforeSrc} 
-        alt={`Before - ${alt}`}
-        className="absolute inset-0 w-full h-full object-contain"
-        draggable={false}
-      />
-      
-      {/* After Image (Clipped) */}
-      <div 
-        className="absolute inset-0 overflow-hidden"
-        style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
-      >
+      {/* Container that maintains aspect ratio */}
+      <div className="relative">
+        {/* Before Image - Sets the size */}
         <img 
-          src={afterSrc} 
-          alt={`After - ${alt}`}
-          className="w-full h-full object-contain"
+          src={beforeSrc} 
+          alt={`Before - ${alt}`}
+          className="block max-w-full max-h-full object-contain"
           draggable={false}
         />
+        
+        {/* After Image - Absolutely positioned and clipped */}
+        <div 
+          className="absolute inset-0 overflow-hidden"
+          style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
+        >
+          <img 
+            src={afterSrc} 
+            alt={`After - ${alt}`}
+            className="w-full h-full object-contain"
+            draggable={false}
+          />
+        </div>
       </div>
       
       {/* Slider Line */}

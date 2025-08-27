@@ -16,6 +16,7 @@ import StartScreen from './components/StartScreen';
 import ValueProp from './components/ValueProp';
 import BeforeAfter from './components/BeforeAfter';
 import { sanitizePrompt, apiRateLimiter, secureStorage, sessionManager } from './utils/security';
+import { purchaseCredits, generateUserId } from './services/stripeService';
 
 // Helper to convert a data URL string to a File object
 const dataURLtoFile = (dataurl: string, filename: string): File => {
@@ -51,20 +52,40 @@ const App: React.FC = () => {
   const [aspect, setAspect] = useState<number | undefined>();
   const [isComparing, setIsComparing] = useState<boolean>(false);
   const [showBeforeAfter, setShowBeforeAfter] = useState<boolean>(false);
+  const [userId] = useState<string>(() => generateUserId());
   const [creditsRemaining, setCreditsRemaining] = useState<number>(() => {
     // Initialize session and clean expired storage items on app start
     sessionManager.initializeSession();
     secureStorage.cleanExpired();
     
+    // Get initial credits from environment variable (for development)
+    const envCredits = import.meta.env.VITE_INITIAL_CREDITS;
+    const initialCredits = envCredits ? parseInt(envCredits) : 3;
+    
+    console.log('🔧 Debug Credits:', {
+      envCredits,
+      initialCredits,
+      parsedCredits: parseInt(envCredits || '3')
+    });
+    
+    // For development: always use env credits (ignore saved credits)
+    if (import.meta.env.DEV && envCredits !== undefined) {
+      console.log('🔧 DEV MODE: Using env credits:', initialCredits);
+      return initialCredits;
+    }
+    
     // Validate session and reset credits if session is invalid
     if (!sessionManager.isSessionValid()) {
       sessionManager.clearSession();
       sessionManager.initializeSession();
-      return 3; // Reset to 3 free credits for new session
+      console.log('🔧 New session: Using initial credits:', initialCredits);
+      return initialCredits;
     }
     
     const saved = secureStorage.getItem('creditsRemaining');
-    return saved ? parseInt(saved) : 3; // 3 free credits to start
+    const finalCredits = saved ? parseInt(saved) : initialCredits;
+    console.log('🔧 Using credits:', { saved, finalCredits });
+    return finalCredits;
   });
   const imgRef = useRef<HTMLImageElement>(null);
 
@@ -337,22 +358,52 @@ const App: React.FC = () => {
     const img = e.currentTarget;
     const rect = img.getBoundingClientRect();
 
-    // Get click position relative to the visible image bounds
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    // Calculate the actual displayed image dimensions (considering object-contain)
+    const imageAspectRatio = img.naturalWidth / img.naturalHeight;
+    const containerAspectRatio = rect.width / rect.height;
 
-    // Store display position as percentage of image element
-    const displayX = (x / rect.width) * 100;
-    const displayY = (y / rect.height) * 100;
+    let displayedWidth, displayedHeight, offsetX, offsetY;
+
+    if (imageAspectRatio > containerAspectRatio) {
+      // Image is wider - fit to width
+      displayedWidth = rect.width;
+      displayedHeight = rect.width / imageAspectRatio;
+      offsetX = 0;
+      offsetY = (rect.height - displayedHeight) / 2;
+    } else {
+      // Image is taller - fit to height
+      displayedWidth = rect.height * imageAspectRatio;
+      displayedHeight = rect.height;
+      offsetX = (rect.width - displayedWidth) / 2;
+      offsetY = 0;
+    }
+
+    // Get click position relative to the container
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
+    // Check if click is within the actual image bounds
+    if (clickX < offsetX || clickX > offsetX + displayedWidth || 
+        clickY < offsetY || clickY > offsetY + displayedHeight) {
+      return; // Click was outside the actual image
+    }
+
+    // Calculate position relative to the displayed image
+    const relativeX = clickX - offsetX;
+    const relativeY = clickY - offsetY;
+
+    // Convert to percentage of the displayed image
+    const displayX = (relativeX / displayedWidth) * 100;
+    const displayY = (relativeY / displayedHeight) * 100;
 
     setDisplayHotspot({ x: displayX, y: displayY });
 
     // Calculate coordinates for API using natural image dimensions
-    const scaleX = img.naturalWidth / rect.width;
-    const scaleY = img.naturalHeight / rect.height;
+    const scaleX = img.naturalWidth / displayedWidth;
+    const scaleY = img.naturalHeight / displayedHeight;
 
-    const originalX = Math.round(x * scaleX);
-    const originalY = Math.round(y * scaleY);
+    const originalX = Math.round(relativeX * scaleX);
+    const originalY = Math.round(relativeY * scaleY);
 
     setEditHotspot({ x: originalX, y: originalY });
 };
@@ -381,22 +432,24 @@ const App: React.FC = () => {
     }
 
     const imageDisplay = showBeforeAfter && originalImageUrl && currentImageUrl && historyIndex > 0 ? (
-      <div className="w-full h-[70vh]">
-        <BeforeAfter
-          beforeSrc={originalImageUrl}
-          afterSrc={currentImageUrl}
-          alt="Photo edit comparison"
-        />
+      <div className="w-full h-full flex items-center justify-center p-4">
+        <div className="max-w-full max-h-full">
+          <BeforeAfter
+            beforeSrc={originalImageUrl}
+            afterSrc={currentImageUrl}
+            alt="Photo edit comparison"
+          />
+        </div>
       </div>
     ) : (
-      <div className="relative">
+      <div className="relative w-full h-full flex items-center justify-center p-4">
         {/* Base image is the original, always at the bottom */}
         {originalImageUrl && (
             <img
                 key={originalImageUrl}
                 src={originalImageUrl}
                 alt="Original"
-                className="w-full h-auto object-contain max-h-full rounded-lg md:rounded-xl pointer-events-none"
+                className="max-w-full max-h-full object-contain rounded-lg md:rounded-xl pointer-events-none"
             />
         )}
         {/* The current image is an overlay that fades in/out for comparison */}
@@ -406,7 +459,7 @@ const App: React.FC = () => {
             src={currentImageUrl}
             alt="Current"
             onClick={handleImageClick}
-            className={`absolute top-0 left-0 w-full h-auto object-contain max-h-full rounded-lg md:rounded-xl transition-opacity duration-200 ease-in-out ${isComparing ? 'opacity-0' : 'opacity-100'} ${activeTab === 'retouch' ? 'cursor-crosshair' : 'cursor-pointer'}`}
+            className={`absolute max-w-full max-h-full object-contain rounded-lg md:rounded-xl transition-opacity duration-200 ease-in-out ${isComparing ? 'opacity-0' : 'opacity-100'} ${activeTab === 'retouch' ? 'cursor-crosshair' : 'cursor-pointer'}`}
         />
       </div>
     );
@@ -418,7 +471,7 @@ const App: React.FC = () => {
         key={`crop-${currentImageUrl}`}
         src={currentImageUrl}
         alt="Crop this image"
-        className="w-full h-auto object-contain max-h-[70vh] rounded-xl"
+        className="max-w-full max-h-[70vh] object-contain rounded-xl"
       />
     );
 
@@ -434,28 +487,60 @@ const App: React.FC = () => {
             )}
 
             {activeTab === 'crop' ? (
-              <ReactCrop
-                crop={crop}
-                onChange={c => setCrop(c)}
-                onComplete={c => setCompletedCrop(c)}
-                aspect={aspect}
-                className="max-h-full"
-              >
-                {cropImageElement}
-              </ReactCrop>
+              <div className="w-full h-full flex items-center justify-center p-4">
+                <ReactCrop
+                  crop={crop}
+                  onChange={c => setCrop(c)}
+                  onComplete={c => setCompletedCrop(c)}
+                  aspect={aspect}
+                  className="max-w-full max-h-full"
+                >
+                  {cropImageElement}
+                </ReactCrop>
+              </div>
             ) : imageDisplay }
 
-            {displayHotspot && !isLoading && activeTab === 'retouch' && (
-                <div
-                    className="absolute rounded-full w-6 h-6 bg-white/50 border-2 border-white pointer-events-none z-10"
-                    style={{
-                      left: `${displayHotspot.x}%`,
-                      top: `${displayHotspot.y}%`,
-                      transform: 'translate(-50%, -50%)'
-                    }}
-                >
-                    <div className="absolute inset-0 rounded-full w-6 h-6 animate-ping bg-white"></div>
-                </div>
+            {displayHotspot && !isLoading && activeTab === 'retouch' && imgRef.current && (
+                (() => {
+                  // Calculate actual displayed image position and size
+                  const img = imgRef.current!;
+                  const rect = img.getBoundingClientRect();
+                  const containerRect = img.parentElement!.getBoundingClientRect();
+                  
+                  const imageAspectRatio = img.naturalWidth / img.naturalHeight;
+                  const containerAspectRatio = rect.width / rect.height;
+                  
+                  let displayedWidth, displayedHeight, offsetX, offsetY;
+                  
+                  if (imageAspectRatio > containerAspectRatio) {
+                    displayedWidth = rect.width;
+                    displayedHeight = rect.width / imageAspectRatio;
+                    offsetX = 0;
+                    offsetY = (rect.height - displayedHeight) / 2;
+                  } else {
+                    displayedWidth = rect.height * imageAspectRatio;
+                    displayedHeight = rect.height;
+                    offsetX = (rect.width - displayedWidth) / 2;
+                    offsetY = 0;
+                  }
+                  
+                  // Convert display hotspot percentages to container position
+                  const pinX = offsetX + (displayedWidth * displayHotspot.x / 100);
+                  const pinY = offsetY + (displayedHeight * displayHotspot.y / 100);
+                  
+                  return (
+                    <div
+                      className="absolute rounded-full w-6 h-6 bg-white/50 border-2 border-white pointer-events-none z-10"
+                      style={{
+                        left: `${pinX}px`,
+                        top: `${pinY}px`,
+                        transform: 'translate(-50%, -50%)'
+                      }}
+                    >
+                      <div className="absolute inset-0 rounded-full w-6 h-6 animate-ping bg-white"></div>
+                    </div>
+                  );
+                })()
             )}
         </div>
 
@@ -486,15 +571,50 @@ const App: React.FC = () => {
                             <p className="text-sm text-gray-500">
                                 {creditsRemaining} credits remaining
                             </p>
+                            {/* Development: Reset credits button */}
+                            {import.meta.env.DEV && (
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => {
+                                            const envCredits = import.meta.env.VITE_INITIAL_CREDITS;
+                                            const initialCredits = envCredits ? parseInt(envCredits) : 3;
+                                            console.log('🔄 Resetting credits to:', initialCredits);
+                                            setCreditsRemaining(initialCredits);
+                                            secureStorage.setItem('creditsRemaining', initialCredits, 1440);
+                                        }}
+                                        className="bg-green-600 text-white px-3 py-1 rounded text-xs font-medium hover:bg-green-700 transition-colors"
+                                        title="Development only: Reset credits to env value"
+                                    >
+                                        Reset Credits
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            console.log('🗑️ Clearing all storage');
+                                            secureStorage.clear();
+                                            sessionManager.clearSession();
+                                            window.location.reload();
+                                        }}
+                                        className="bg-red-600 text-white px-3 py-1 rounded text-xs font-medium hover:bg-red-700 transition-colors"
+                                        title="Development only: Clear all data and reload"
+                                    >
+                                        Clear Storage
+                                    </button>
+                                </div>
+                            )}
                             {creditsRemaining <= 0 && (
-                                <a
-                                    href="https://tally.so/r/w4jbJM"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            await purchaseCredits(userId, 50);
+                                        } catch (error) {
+                                            console.error('Failed to start purchase:', error);
+                                            setError('Failed to start purchase. Please try again.');
+                                        }
+                                    }}
                                     className="bg-white text-black px-4 py-2 rounded text-sm font-medium hover:bg-gray-200 transition-colors"
                                 >
-                                    Buy Credits ($5)
-                                </a>
+                                    Buy 50 Credits ($5)
+                                </button>
                             )}
                         </div>
                     </div>
