@@ -29,15 +29,19 @@ const StartScreen: React.FC<StartScreenProps> = ({ onFileSelect }) => {
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('🔧 StartScreen handleFileChange called');
     const files = e.target.files;
+    console.log('🔧 StartScreen files:', files);
     if (files && files[0]) {
       const error = validateFile(files[0]);
       if (error) {
+        console.log('🔧 StartScreen validation error:', error);
         alert(error); // In production, use a proper toast/modal
         e.target.value = ''; // Clear the input
         return;
       }
     }
+    console.log('🔧 StartScreen calling onFileSelect with:', files);
     onFileSelect(files);
   };
 
@@ -48,16 +52,20 @@ const StartScreen: React.FC<StartScreenProps> = ({ onFileSelect }) => {
         onDragOver={(e) => { e.preventDefault(); setIsDraggingOver(true); }}
         onDragLeave={() => setIsDraggingOver(false)}
         onDrop={(e) => {
+          console.log('🔧 StartScreen onDrop called');
           e.preventDefault();
           setIsDraggingOver(false);
           const files = e.dataTransfer.files;
+          console.log('🔧 StartScreen dropped files:', files);
           if (files && files[0]) {
             const error = validateFile(files[0]);
             if (error) {
+              console.log('🔧 StartScreen drop validation error:', error);
               alert(error);
               return;
             }
           }
+          console.log('🔧 StartScreen calling onFileSelect from drop with:', files);
           onFileSelect(files);
         }}
       >
