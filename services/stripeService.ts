@@ -6,9 +6,17 @@
 import { loadStripe } from '@stripe/stripe-js';
 import { imageStateManager, type ImageState } from '../utils/security';
 
-// Use environment variables for production deployment
-const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_51PaXLV2KefGXrZX2IqX3cNM7iJEfkkBN0rAquVGFtO9YG0PIwB8aCMut5OHrKVFVze82LSf8OQKKHvQYYzSol72H00EDRX0L05';
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+// Load from environment variables - ensure .env file is configured
+const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+
+// Validate required environment variables
+if (!STRIPE_PUBLISHABLE_KEY) {
+  throw new Error('VITE_STRIPE_PUBLISHABLE_KEY is required. Please check your .env file.');
+}
+if (!BACKEND_URL) {
+  throw new Error('VITE_BACKEND_URL is required. Please check your .env file.');
+}
 
 // Initialize Stripe
 const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);

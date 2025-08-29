@@ -3,13 +3,13 @@
     "allow": [
       "Bash(grep:*)",
       "Bash(cd:*)",
-
       "Bash(npm install:*)",
       "Bash(npm run build:*)",
       "Bash(npm run dev:*)",
       "Bash(node server.js)",
       "Bash(pkill:*)",
-      "Bash(lsof:*)"
+      "Bash(lsof:*)",
+      "Bash(chmod:*)"
     ],
     "additionalDirectories": [
       "/Users/cvk/Downloads"

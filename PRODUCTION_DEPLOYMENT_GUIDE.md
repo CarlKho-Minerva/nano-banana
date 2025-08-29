@@ -12,6 +12,19 @@ This guide will help you deploy NanoBanana to production with proper environment
 
 ## 📋 Environment Variables Setup
 
+**IMPORTANT**: Never commit actual API keys to git! Use the `.env.example` file as a template.
+
+### Step 1: Local Development Setup
+
+1. Copy `.env.example` to `.env` in your project root:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Fill in your actual values in the `.env` file
+
+3. Add `.env` to your `.gitignore` (already included)
+
 ### Backend Environment Variables
 
 Your backend (Node.js server) needs these environment variables in production:
@@ -42,8 +55,7 @@ VITE_STRIPE_PUBLISHABLE_KEY=pk_live_XXXXXX  # Get from Stripe Dashboard > Live M
 # Backend URL  
 VITE_BACKEND_URL=https://your-backend-name.onrender.com  # Replace with your actual backend URL
 
-# Google AI Configuration
-VITE_API_KEY=XXXXXX  # Your Google AI API key (same as GEMINI_API_KEY)
+# 🔒 SECURITY: No API keys in frontend - all AI processing happens securely on backend
 ```
 
 ## 🏗️ Deployment Platforms

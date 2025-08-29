@@ -203,21 +203,30 @@ export const secureStorage = {
   getItem: (key: string): any => {
     try {
       const obfuscated = localStorage.getItem(`nb_${key}`);
-      if (!obfuscated) return null;
+      if (!obfuscated) {
+        console.log('🔍 No data found for key:', `nb_${key}`);
+        return null;
+      }
       
       const dataStr = simpleDeobfuscate(obfuscated);
-      if (!dataStr) return null;
+      if (!dataStr) {
+        console.log('🔍 Failed to deobfuscate data for key:', `nb_${key}`);
+        return null;
+      }
       
       const data = JSON.parse(dataStr);
       
       // Check expiration
       if (data.expires && Date.now() > data.expires) {
+        console.log('🔍 Data expired for key:', `nb_${key}`, 'expired at:', new Date(data.expires));
         localStorage.removeItem(`nb_${key}`);
         return null;
       }
       
+      console.log('🔍 Successfully retrieved data for key:', `nb_${key}`);
       return data.value;
     } catch (error) {
+      console.log('🔍 Error retrieving data for key:', `nb_${key}`, error);
       // Clean up corrupted data
       localStorage.removeItem(`nb_${key}`);
       return null;
@@ -339,6 +348,7 @@ export const imageStateManager = {
       // Use session-based key for storage
       const storageKey = `imageState_${imageState.userId}_${imageState.sessionId}`;
       
+      
       // Check localStorage capacity (approximate 5MB limit)
       const maxSize = 4 * 1024 * 1024; // 4MB to be safe
       if (stateSize > maxSize) {
@@ -353,13 +363,13 @@ export const imageStateManager = {
           )
         };
         
-        secureStorage.setItem(storageKey, lowerQualityState, 480); // 8 hours expiry (same as session)
+        secureStorage.setItem(storageKey, lowerQualityState, 10080); // 7 days expiry
       } else {
-        secureStorage.setItem(storageKey, compressedState, 480); // 8 hours expiry (same as session)
+        secureStorage.setItem(storageKey, compressedState, 10080); // 7 days expiry
       }
       
       // Also save a reference to the latest session for this user
-      secureStorage.setItem(`latestSession_${imageState.userId}`, imageState.sessionId, 480); // 8 hours expiry
+      secureStorage.setItem(`latestSession_${imageState.userId}`, imageState.sessionId, 10080); // 7 days expiry
       
       return true;
     } catch (error) {
@@ -525,5 +535,54 @@ export const imageStateManager = {
     }
     
     return new File([u8arr], filename, {type: mime});
+  },
+
+  // Get all sessions for a user (for recent sessions list)
+  getAllUserSessions: (userId: string): ImageState[] => {
+    try {
+      const sessions: ImageState[] = [];
+      const keys = Object.keys(localStorage);
+      
+      console.log('🔍 DEBUG getAllUserSessions:', {
+        userId,
+        totalKeys: keys.length,
+        sampleKeys: keys.filter(k => k.includes('imageState')).slice(0, 5)
+      });
+      
+      // Find all session keys for this user (accounting for nb_ prefix from secureStorage)
+      const userSessionKeys = keys.filter(key => 
+        key.includes(`imageState_${userId}_`) && key.includes('session_')
+      );
+      
+      console.log('🔍 Found matching keys:', userSessionKeys);
+      
+      // Get each session state
+      for (const key of userSessionKeys) {
+        console.log('🔍 Trying to get state for key:', key);
+        // Remove the nb_ prefix since secureStorage.getItem adds it
+        const keyWithoutPrefix = key.replace('nb_', '');
+        const state = secureStorage.getItem(keyWithoutPrefix);
+        console.log('🔍 Retrieved state:', !!state, state ? 'valid' : 'null');
+        
+        if (state) {
+          console.log('🔍 State validation:', imageStateManager.validateImageState(state));
+          if (imageStateManager.validateImageState(state)) {
+            sessions.push(state);
+            console.log('✅ Added session:', state.sessionId);
+          }
+        }
+      }
+      
+      console.log('🔍 Final sessions array:', sessions.length, sessions.map(s => s.sessionId));
+      
+      // Sort by timestamp (newest first)
+      sessions.sort((a, b) => b.timestamp - a.timestamp);
+      
+      // Return up to 10 most recent sessions
+      return sessions.slice(0, 10);
+    } catch (error) {
+      console.error('Error getting user sessions:', error);
+      return [];
+    }
   }
 };

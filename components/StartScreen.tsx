@@ -8,9 +8,10 @@ import { UploadIcon, MagicWandIcon, PaletteIcon, SunIcon } from './icons';
 
 interface StartScreenProps {
   onFileSelect: (files: FileList | null) => void;
+  onShowRecentSessions?: () => void;
 }
 
-const StartScreen: React.FC<StartScreenProps> = ({ onFileSelect }) => {
+const StartScreen: React.FC<StartScreenProps> = ({ onFileSelect, onShowRecentSessions }) => {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   const validateFile = (file: File): string | null => {
@@ -75,6 +76,18 @@ const StartScreen: React.FC<StartScreenProps> = ({ onFileSelect }) => {
             <p className="text-gray-400 text-xs sm:text-sm font-light px-2">
               Try: "remove person", "change background", "add sunglasses"
             </p>
+            
+            {onShowRecentSessions && (
+              <button
+                onClick={onShowRecentSessions}
+                className="mt-3 flex items-center gap-1 mx-auto bg-white/5 hover:bg-white/10 border border-white/20 hover:border-white/40 text-gray-300 hover:text-white px-3 py-1.5 rounded-md transition-all duration-200 text-xs font-light"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Recent Sessions
+              </button>
+            )}
           </div>
 
         </div>

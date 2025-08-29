@@ -64,8 +64,13 @@ const EditPageWrapper: React.FC = () => {
           );
           setInitialImage(restoredFile);
         } else {
-          // Don't redirect immediately. This might be a fresh load after payment.
-          // The EditPage component itself will handle the final redirect if needed after its own checks.
+          // No valid session data found - redirect to home with a helpful message
+          navigate('/', { 
+            state: { 
+              message: 'Session expired or not found. Please upload an image to start editing.' 
+            } 
+          });
+          return;
         }
         
       } else {

@@ -186,7 +186,7 @@ const TestingPanel: React.FC = () => {
       addResult('🔗 Testing backend connection...');
       
       // Test health endpoint
-      const healthResponse = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/health`);
+      const healthResponse = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/health`);
       if (healthResponse.ok) {
         const healthData = await healthResponse.json();
         addResult(`✅ Backend health check passed: ${healthData.status}`);
@@ -197,7 +197,7 @@ const TestingPanel: React.FC = () => {
       
       // Test Stripe endpoint
       addResult('🔗 Testing Stripe checkout creation...');
-      const stripeResponse = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/create-checkout-session`, {
+      const stripeResponse = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/create-checkout-session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ReactCrop, { type Crop, type PixelCrop } from 'react-image-crop';
 import { generateEditedImage, generateFilteredImage, generateAdjustedImage } from '../services/geminiService';
 import Spinner from '../components/Spinner';
@@ -37,6 +38,7 @@ interface EditPageProps {
 
 
 const EditPage: React.FC<EditPageProps> = ({ initialImage, sessionId: propSessionId }) => {
+  const navigate = useNavigate();
   const [history, setHistory] = useState<File[]>(initialImage ? [initialImage] : []);
   const [historyIndex, setHistoryIndex] = useState<number>(initialImage ? 0 : -1);
   const [prompt, setPrompt] = useState<string>('');
@@ -762,6 +764,59 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage, sessionId: propSessio
                 className="bg-transparent border border-white/20 text-gray-200 font-semibold py-2 px-4 rounded-md transition-all duration-200 ease-in-out hover:bg-white/10 hover:border-white/30 active:scale-95 text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-transparent"
               >
                 Reset
+            </button>
+
+            <button
+                onClick={async (e) => {
+                  const button = e.currentTarget;
+                  const originalText = button.innerHTML;
+                  
+                  // Show saving feedback
+                  button.innerHTML = `
+                    <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Saving...
+                  `;
+                  button.disabled = true;
+                  
+                  // Save current state before leaving
+                  if (currentImage && sessionId) {
+                    try {
+                      // Convert files to base64 for storage
+                      const currentImageBase64 = await imageStateManager.fileToBase64(currentImage);
+                      const originalImageBase64 = history[0] ? await imageStateManager.fileToBase64(history[0]) : '';
+                      const historyBase64 = await Promise.all(
+                        history.map(img => imageStateManager.fileToBase64(img))
+                      );
+                      
+                      const currentState: Omit<ImageState, 'timestamp'> = {
+                        sessionId,
+                        userId,
+                        originalImage: originalImageBase64,
+                        currentImage: currentImageBase64,
+                        history: historyBase64,
+                        historyIndex,
+                        editHotspot,
+                        prompt
+                      };
+                      await imageStateManager.saveImageState(currentState);
+                    } catch (error) {
+                      console.error('Failed to save session:', error);
+                      // Restore button on error
+                      button.innerHTML = originalText;
+                      button.disabled = false;
+                      return;
+                    }
+                  }
+                  navigate('/');
+                }}
+                className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-md transition-all duration-200 active:scale-95 text-sm"
+            >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                Save & Go Back
             </button>
 
             <button

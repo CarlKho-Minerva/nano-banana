@@ -3,57 +3,68 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import StartScreen from '../components/StartScreen';
 import ValueProp from '../components/ValueProp';
+import RecentSessions from '../components/RecentSessions';
 import { imageStateManager } from '../utils/security';
 import { getUserId } from '../services/stripeService';
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [showRecentSessions, setShowRecentSessions] = useState(false);
 
-  // Check for preserved image state on home page load and offer to restore
+  // Auto-restore logic DISABLED for better UX
+  // Users can manually access recent sessions via the "Recent Sessions" button
   useEffect(() => {
-    // TEMPORARILY DISABLED - causing redirect issues after Stripe
-    // TODO: Re-enable this but check if user just came from payment flow
-    
+    // Handle payment success/cancel redirects and error messages
     const urlParams = new URLSearchParams(window.location.search);
     const paymentStatus = urlParams.get('payment');
+    const stateMessage = (location.state as any)?.message;
     
-    // Only auto-restore if user didn't just come from payment
-    if (!paymentStatus) {
-      const userId = getUserId();
-      const restoredState = imageStateManager.restoreLatestImageState(userId);
-      
-      if (restoredState) {
-        
-        // Show a brief notification and auto-redirect to specific session
-        const notification = document.createElement('div');
-        notification.style.cssText = `
-          position: fixed;
-          top: 20px;
-          right: 20px;
-          background: #10B981;
-          color: white;
-          padding: 16px;
-          border-radius: 8px;
-          z-index: 9999;
-          font-size: 14px;
-          font-weight: 500;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        `;
-        notification.textContent = '✅ Restoring your previous editing session...';
-        document.body.appendChild(notification);
-        
-        // Auto-redirect to specific session URL after a brief moment
-        setTimeout(() => {
-          document.body.removeChild(notification);
-          navigate(`/edit/${restoredState.sessionId}`);
-        }, 2000);
-      }
+    let notificationText = null;
+    let backgroundColor = '#10B981'; // default green
+    
+    if (paymentStatus === 'success') {
+      notificationText = '💳 Payment successful! You can continue editing.';
+    } else if (stateMessage) {
+      notificationText = stateMessage;
+      backgroundColor = '#F59E0B'; // orange for warnings
     }
-  }, [navigate]);
+    
+    if (notificationText) {
+      const notification = document.createElement('div');
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${backgroundColor};
+        color: white;
+        padding: 16px;
+        border-radius: 8px;
+        z-index: 9999;
+        font-size: 14px;
+        font-weight: 500;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        max-width: 300px;
+      `;
+      notification.textContent = notificationText;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification);
+        }
+      }, 4000);
+    }
+    
+    // Clean up URL and state
+    if (paymentStatus || stateMessage) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [navigate, location.state]);
 
   const handleFileSelect = (files: FileList | null) => {
     if (files && files[0]) {
@@ -77,9 +88,17 @@ const HomePage: React.FC = () => {
       <div className="min-h-screen flex flex-col lg:flex-row overflow-x-hidden">
         <ValueProp />
         <div className="w-full lg:w-1/2 flex-1">
-          <StartScreen onFileSelect={handleFileSelect} />
+          <StartScreen 
+            onFileSelect={handleFileSelect} 
+            onShowRecentSessions={() => setShowRecentSessions(true)}
+          />
         </div>
       </div>
+
+      {/* Recent Sessions Modal */}
+      {showRecentSessions && (
+        <RecentSessions onClose={() => setShowRecentSessions(false)} />
+      )}
     </div>
   );
 };
