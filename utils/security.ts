@@ -264,3 +264,286 @@ export const secureStorage = {
     });
   }
 };
+
+// Image state preservation utilities
+export interface ImageState {
+  currentImage: string; // base64
+  originalImage: string; // base64
+  history: string[]; // base64 array
+  historyIndex: number;
+  editHotspot: { x: number, y: number } | null;
+  activeTab: string;
+  prompt: string;
+  timestamp: number;
+  sessionId: string; // unique session identifier
+  userId: string; // user identifier
+}
+
+export const imageStateManager = {
+  // Compress base64 image data to reduce storage size
+  compressImage: (base64: string, quality: number = 0.8): Promise<string> => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      img.onload = () => {
+        // Calculate new dimensions (max 1024x1024 for storage)
+        const maxSize = 1024;
+        let { width, height } = img;
+        
+        if (width > maxSize || height > maxSize) {
+          const ratio = Math.min(maxSize / width, maxSize / height);
+          width = Math.floor(width * ratio);
+          height = Math.floor(height * ratio);
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressed);
+        } else {
+          resolve(base64);
+        }
+      };
+      
+      img.onerror = () => resolve(base64);
+      img.src = base64;
+    });
+  },
+
+  // Generate unique session ID
+  generateSessionId: (): string => {
+    return `session_${Math.random().toString(36).substring(2)}_${Date.now().toString(36)}`;
+  },
+
+  // Save image state before payment redirect
+  saveImageState: async (imageState: Omit<ImageState, 'timestamp'>): Promise<boolean> => {
+    try {
+      console.log(`💾 Saving image state for session ${imageState.sessionId}...`);
+      
+      // Compress images to reduce storage footprint
+      const compressedState: ImageState = {
+        ...imageState,
+        currentImage: await imageStateManager.compressImage(imageState.currentImage),
+        originalImage: await imageStateManager.compressImage(imageState.originalImage),
+        history: await Promise.all(
+          imageState.history.map(img => imageStateManager.compressImage(img))
+        ),
+        timestamp: Date.now()
+      };
+      
+      // Calculate storage size
+      const stateSize = JSON.stringify(compressedState).length;
+      console.log(`📊 Image state size: ${(stateSize / 1024).toFixed(1)}KB`);
+      
+      // Use session-based key for storage
+      const storageKey = `imageState_${imageState.userId}_${imageState.sessionId}`;
+      
+      // Check localStorage capacity (approximate 5MB limit)
+      const maxSize = 4 * 1024 * 1024; // 4MB to be safe
+      if (stateSize > maxSize) {
+        console.warn('⚠️ Image state too large, using lower quality compression');
+        
+        // Try with lower quality compression
+        const lowerQualityState = {
+          ...compressedState,
+          currentImage: await imageStateManager.compressImage(imageState.currentImage, 0.6),
+          originalImage: await imageStateManager.compressImage(imageState.originalImage, 0.6),
+          history: await Promise.all(
+            imageState.history.map(img => imageStateManager.compressImage(img, 0.6))
+          )
+        };
+        
+        secureStorage.setItem(storageKey, lowerQualityState, 480); // 8 hours expiry (same as session)
+      } else {
+        secureStorage.setItem(storageKey, compressedState, 480); // 8 hours expiry (same as session)
+      }
+      
+      // Also save a reference to the latest session for this user
+      secureStorage.setItem(`latestSession_${imageState.userId}`, imageState.sessionId, 480); // 8 hours expiry
+      
+      console.log('✅ Image state saved successfully');
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to save image state:', error);
+      return false;
+    }
+  },
+
+  // Restore image state by session ID
+  restoreImageStateBySession: (userId: string, sessionId: string): ImageState | null => {
+    try {
+      console.log(`🔄 Attempting to restore state for session ${sessionId}...`);
+      const storageKey = `imageState_${userId}_${sessionId}`;
+      const state = secureStorage.getItem(storageKey);
+      
+      if (state && imageStateManager.validateImageState(state)) {
+        console.log('✅ Image state restored successfully');
+        return state;
+      }
+      
+      console.log('ℹ️ No valid image state found for this session');
+      return null;
+    } catch (error) {
+      console.error('❌ Failed to restore image state:', error);
+      return null;
+    }
+  },
+
+  // Restore latest image state for user (fallback)
+  restoreLatestImageState: (userId: string): ImageState | null => {
+    try {
+      console.log(`🔄 Attempting to restore latest state for user ${userId}...`);
+      
+      // Get the latest session ID for this user
+      const latestSessionId = secureStorage.getItem(`latestSession_${userId}`);
+      
+      if (latestSessionId) {
+        return imageStateManager.restoreImageStateBySession(userId, latestSessionId);
+      }
+      
+      console.log('ℹ️ No latest session found for user');
+      return null;
+    } catch (error) {
+      console.error('❌ Failed to restore latest image state:', error);
+      return null;
+    }
+  },
+
+  // Legacy method for backward compatibility
+  restoreImageState: (): ImageState | null => {
+    try {
+      console.log('🔄 Attempting to restore image state (legacy)...');
+      const state = secureStorage.getItem('imageState');
+      
+      if (state && imageStateManager.validateImageState(state)) {
+        console.log('✅ Legacy image state restored successfully');
+        return state;
+      }
+      
+      console.log('ℹ️ No valid legacy image state found');
+      return null;
+    } catch (error) {
+      console.error('❌ Failed to restore legacy image state:', error);
+      return null;
+    }
+  },
+
+  // Clear saved image state by session
+  clearImageState: (userId?: string, sessionId?: string): void => {
+    try {
+      if (userId && sessionId) {
+        const storageKey = `imageState_${userId}_${sessionId}`;
+        secureStorage.removeItem(storageKey);
+        secureStorage.removeItem(`latestSession_${userId}`);
+        console.log(`🧹 Image state cleared for session ${sessionId}`);
+      } else {
+        // Legacy cleanup
+        secureStorage.removeItem('imageState');
+        console.log('🧹 Legacy image state cleared');
+      }
+    } catch (error) {
+      console.error('❌ Failed to clear image state:', error);
+    }
+  },
+
+  // Clean up expired sessions for a user
+  cleanExpiredSessions: (userId: string): void => {
+    try {
+      const keys = Object.keys(localStorage);
+      let cleaned = 0;
+      
+      keys.forEach(key => {
+        if (key.startsWith(`nb_imageState_${userId}_`)) {
+          try {
+            const obfuscated = localStorage.getItem(key);
+            if (obfuscated) {
+              const dataStr = secureStorage.getItem(key.replace('nb_', ''));
+              if (!dataStr) {
+                localStorage.removeItem(key);
+                cleaned++;
+              }
+            }
+          } catch {
+            localStorage.removeItem(key);
+            cleaned++;
+          }
+        }
+      });
+      
+      if (cleaned > 0) {
+        console.log(`🧹 Cleaned ${cleaned} expired sessions for user ${userId}`);
+      }
+    } catch (error) {
+      console.error('❌ Failed to clean expired sessions:', error);
+    }
+  },
+
+  // Validate image state structure and data
+  validateImageState: (state: any): state is ImageState => {
+    if (!state || typeof state !== 'object') return false;
+    
+    // Required fields for new format
+    const newRequired = ['currentImage', 'originalImage', 'history', 'historyIndex', 'timestamp', 'sessionId', 'userId'];
+    const hasNewRequired = newRequired.every(key => key in state);
+    
+    // Required fields for legacy format
+    const legacyRequired = ['currentImage', 'originalImage', 'history', 'historyIndex', 'timestamp'];
+    const hasLegacyRequired = legacyRequired.every(key => key in state);
+    
+    if (!hasNewRequired && !hasLegacyRequired) {
+      console.log('❌ State missing required fields');
+      return false;
+    }
+    
+    // Validate base64 format
+    const base64Regex = /^data:image\/(jpeg|jpg|png|webp);base64,/;
+    if (!base64Regex.test(state.currentImage) || !base64Regex.test(state.originalImage)) {
+      console.log('❌ Invalid base64 image format');
+      return false;
+    }
+    
+    // Check if state is too old (older than 2 hours)
+    const twoHours = 2 * 60 * 60 * 1000;
+    if (Date.now() - state.timestamp > twoHours) {
+      console.log('⏰ Image state expired');
+      return false;
+    }
+    
+    return true;
+  },
+
+  // Convert File to base64
+  fileToBase64: (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
+    });
+  },
+
+  // Convert base64 to File
+  base64ToFile: (base64: string, filename: string): File => {
+    const arr = base64.split(',');
+    if (arr.length < 2) throw new Error("Invalid data URL");
+    
+    const mimeMatch = arr[0].match(/:(.*?);/);
+    if (!mimeMatch || !mimeMatch[1]) throw new Error("Could not parse MIME type");
+    
+    const mime = mimeMatch[1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    
+    while(n--){
+        u8arr[n] = bstr.charCodeAt(n);
+    }
+    
+    return new File([u8arr], filename, {type: mime});
+  }
+};

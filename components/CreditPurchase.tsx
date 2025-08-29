@@ -1,21 +1,26 @@
 import React, { useState } from 'react';
 import { purchaseCredits } from '../services/stripeService';
+import { imageStateManager, type ImageState } from '../utils/security';
 
 interface CreditPurchaseProps {
   userId: string;
   onPurchaseStart?: () => void;
   className?: string;
+  imageState?: Omit<ImageState, 'timestamp'>;
 }
 
 const CreditPurchase: React.FC<CreditPurchaseProps> = ({ 
   userId, 
   onPurchaseStart,
-  className = '' 
+  className = '',
+  imageState
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastCredits, setLastCredits] = useState<number | null>(null);
 
   const handlePurchase = async (credits: number) => {
+  setLastCredits(credits);
     try {
       setIsLoading(true);
       setError(null);
@@ -24,9 +29,16 @@ const CreditPurchase: React.FC<CreditPurchaseProps> = ({
         onPurchaseStart();
       }
       
-      await purchaseCredits(userId, credits);
+      // Include image state preservation if provided
+      await purchaseCredits(userId, credits, imageState);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to start purchase';
+      // Normalize error message so we always show something useful to the user
+      console.error('Purchase error:', err);
+      const errorMessage = err instanceof Error
+        ? err.message
+        : (err && typeof err === 'object' && 'message' in (err as any))
+          ? String((err as any).message)
+          : String(err) || 'Failed to start purchase';
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -46,6 +58,15 @@ const CreditPurchase: React.FC<CreditPurchaseProps> = ({
         {error && (
           <div className="bg-red-900 border border-red-700 rounded p-3 mb-4">
             <p className="text-red-300 text-sm">{error}</p>
+            <div className="mt-3">
+              <button
+                onClick={() => lastCredits && handlePurchase(lastCredits)}
+                disabled={isLoading || lastCredits === null}
+                className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              >
+                Try Again
+              </button>
+            </div>
           </div>
         )}
 

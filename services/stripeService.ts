@@ -1,4 +1,10 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+*/
+
 import { loadStripe } from '@stripe/stripe-js';
+import { imageStateManager, type ImageState } from '../utils/security';
 
 // Replace with your actual publishable key from Stripe Dashboard
 const STRIPE_PUBLISHABLE_KEY = 'pk_test_51PaXLV2KefGXrZX2IqX3cNM7iJEfkkBN0rAquVGFtO9YG0PIwB8aCMut5OHrKVFVze82LSf8OQKKHvQYYzSol72H00EDRX0L05';
@@ -8,16 +14,38 @@ const BACKEND_URL = 'http://localhost:3001';
 const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
 
 /**
- * Create a checkout session and redirect user to Stripe
+ * Creates a checkout session via the backend.
+ * This function now RETURNS the checkout URL instead of redirecting.
+ * @returns {Promise<string>} The URL to redirect the user to for payment.
  */
-export const purchaseCredits = async (userId: string, credits: number = 50): Promise<void> => {
+export const purchaseCredits = async (
+  userId: string,
+  credits: number = 50,
+  imageState?: Omit<ImageState, 'timestamp'>,
+  sessionId?: string
+): Promise<string> => {
   try {
+    // Save image state before creating the session. This is the critical first step.
+    if (imageState) {
+      console.log('💾 Preserving image state before payment...');
+      const saveSuccess = await imageStateManager.saveImageState(imageState);
+      if (!saveSuccess) {
+        // If saving fails, we should not proceed to payment to avoid data loss.
+        throw new Error('Could not save your current editing session. Please try again.');
+      }
+      console.log('✅ Image state preserved successfully.');
+    }
+
     const response = await fetch(`${BACKEND_URL}/api/create-checkout-session`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ userId, credits }),
+      body: JSON.stringify({
+        userId,
+        credits,
+        sessionId: sessionId || imageState?.sessionId
+      }),
     });
 
     if (!response.ok) {
@@ -25,23 +53,22 @@ export const purchaseCredits = async (userId: string, credits: number = 50): Pro
       throw new Error(error.error || 'Failed to create checkout session');
     }
 
-    const { sessionId } = await response.json();
+    const { url } = await response.json();
 
-    const stripe = await stripePromise;
-    if (!stripe) {
-      throw new Error('Stripe failed to initialize');
+    if (!url) {
+        throw new Error('Backend did not return a checkout URL.');
     }
 
-    // Redirect to Stripe Checkout
-    const result = await stripe.redirectToCheckout({
-      sessionId: sessionId,
-    });
+    console.log('✅ Checkout session created. URL received.');
+    return url; // Return the URL for the component to handle redirection.
 
-    if (result.error) {
-      throw new Error(result.error.message);
-    }
   } catch (error) {
-    console.error('Error creating checkout session:', error);
+    console.error('❌ Error in purchaseCredits service:', error);
+
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error(`Cannot connect to backend server at ${BACKEND_URL}. Make sure the backend is running.`);
+    }
+
     throw error;
   }
 };
@@ -138,15 +165,18 @@ const fileToBase64 = (file: File): Promise<string> => {
 };
 
 /**
- * Generate a simple user ID (replace with real authentication later)
+ * Gets the user's stable ID from localStorage, or creates a new one if it doesn't exist.
+ * This is the single source of truth for the user's identity.
  */
-export const generateUserId = (): string => {
-  const stored = localStorage.getItem('nb_userId');
-  if (stored) {
-    return stored;
+export const getUserId = (): string => {
+  const USER_ID_KEY = 'pixshop_user_id';
+  let userId = localStorage.getItem(USER_ID_KEY);
+  
+  if (!userId) {
+    userId = `user_${Math.random().toString(36).substring(2)}_${Date.now().toString(36)}`;
+    localStorage.setItem(USER_ID_KEY, userId);
+    console.log('🔑 New User ID generated:', userId);
   }
-
-  const newId = Math.random().toString(36).substring(2) + Date.now().toString(36);
-  localStorage.setItem('nb_userId', newId);
-  return newId;
+  
+  return userId;
 };

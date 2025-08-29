@@ -1,8 +1,3 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
-*/
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import ReactCrop, { type Crop, type PixelCrop } from 'react-image-crop';
 import { generateEditedImage, generateFilteredImage, generateAdjustedImage } from '../services/geminiService';
@@ -12,8 +7,9 @@ import AdjustmentPanel from '../components/AdjustmentPanel';
 import CropPanel from '../components/CropPanel';
 import { UndoIcon, RedoIcon, EyeIcon } from '../components/icons';
 import BeforeAfter from '../components/BeforeAfter';
-import { sanitizePrompt, apiRateLimiter, secureStorage, sessionManager } from '../utils/security';
-import { purchaseCredits, generateUserId, getUserCredits } from '../services/stripeService';
+import TestingPanel from '../components/TestingPanel';
+import { sanitizePrompt, apiRateLimiter, secureStorage, sessionManager, imageStateManager, type ImageState } from '../utils/security';
+import { purchaseCredits, getUserId, getUserCredits } from '../services/stripeService';
 
 // Helper to convert a data URL string to a File object
 const dataURLtoFile = (dataurl: string, filename: string): File => {
@@ -36,9 +32,11 @@ type Tab = 'retouch' | 'adjust' | 'filters' | 'crop';
 
 interface EditPageProps {
   initialImage?: File;
+  sessionId?: string;
 }
 
-const EditPage: React.FC<EditPageProps> = ({ initialImage }) => {
+
+const EditPage: React.FC<EditPageProps> = ({ initialImage, sessionId: propSessionId }) => {
   const [history, setHistory] = useState<File[]>(initialImage ? [initialImage] : []);
   const [historyIndex, setHistoryIndex] = useState<number>(initialImage ? 0 : -1);
   const [prompt, setPrompt] = useState<string>('');
@@ -53,24 +51,26 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage }) => {
   const [aspect, setAspect] = useState<number | undefined>();
   const [isComparing, setIsComparing] = useState<boolean>(false);
   const [showBeforeAfter, setShowBeforeAfter] = useState<boolean>(false);
-  const [userId] = useState<string>(() => generateUserId());
+  const [userId] = useState<string>(() => getUserId());
+  const [sessionId] = useState<string>(() => propSessionId || imageStateManager.generateSessionId());
+  const [isPurchasing, setIsPurchasing] = useState<boolean>(false);
   const [creditsRemaining, setCreditsRemaining] = useState<number>(() => {
     sessionManager.initializeSession();
     secureStorage.cleanExpired();
-    
+
     const envCredits = import.meta.env.VITE_INITIAL_CREDITS;
     const initialCredits = envCredits ? parseInt(envCredits) : 3;
-    
+
     if (import.meta.env.DEV && envCredits !== undefined) {
       return initialCredits;
     }
-    
+
     if (!sessionManager.isSessionValid()) {
       sessionManager.clearSession();
       sessionManager.initializeSession();
       return initialCredits;
     }
-    
+
     const saved = secureStorage.getItem('creditsRemaining');
     const finalCredits = saved ? parseInt(saved) : initialCredits;
     return finalCredits;
@@ -79,6 +79,92 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage }) => {
   const imgRef = useRef<HTMLImageElement>(null);
   const imgContainerRef = useRef<HTMLDivElement>(null);
   const [paymentSuccess, setPaymentSuccess] = useState<string | null>(null);
+
+  // Make imageStateManager available globally for console testing (dev only)
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      (window as any).imageStateManager = imageStateManager;
+      (window as any).debugStorage = () => {
+        console.log('🔍 localStorage contents:');
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key?.includes('imageState') || key?.includes('latestSession')) {
+            console.log(`${key}:`, localStorage.getItem(key));
+          }
+        }
+      };
+      console.log('🔧 imageStateManager available globally for testing');
+      console.log('🔧 Run debugStorage() to see localStorage contents');
+      console.log(`🆔 Current session ID: ${sessionId}`);
+    }
+  }, [sessionId]);
+
+  // Save initial image state for new uploads and clean up expired sessions
+  useEffect(() => {
+    console.log('🔄 Initializing edit session...', { initialImage: !!initialImage, sessionId, historyLength: history.length });
+
+    // Clean up expired sessions first
+    imageStateManager.cleanExpiredSessions(userId);
+
+    // For new uploads, save initial state immediately
+    if (initialImage && sessionId && history.length > 0) {
+      console.log('💾 Saving initial state for new upload session:', sessionId);
+      const saveInitialState = async () => {
+        try {
+          const initialImageBase64 = await imageStateManager.fileToBase64(initialImage);
+          const imageState = {
+            currentImage: initialImageBase64,
+            originalImage: initialImageBase64,
+            history: [initialImageBase64],
+            historyIndex: 0,
+            editHotspot: null,
+            activeTab: 'retouch' as Tab,
+            prompt: '',
+            sessionId,
+            userId
+          };
+
+          await imageStateManager.saveImageState(imageState);
+          console.log('✅ Initial state saved for session:', sessionId);
+        } catch (error) {
+          console.error('❌ Failed to save initial state:', error);
+        }
+      };
+
+      saveInitialState();
+    }
+  }, [userId, initialImage, history.length, historyIndex, sessionId]);
+
+  // Additional useEffect to save state when history gets populated (backup)
+  useEffect(() => {
+    if (initialImage && sessionId && history.length > 0 && historyIndex === 0 && history[0] === initialImage) {
+      console.log('🔄 History populated, ensuring state is saved for session:', sessionId);
+      const ensureStateSaved = async () => {
+        // Check if state already exists
+        const existing = imageStateManager.restoreImageStateBySession(userId, sessionId);
+        if (!existing) {
+          console.log('💾 State missing, saving now for session:', sessionId);
+          const initialImageBase64 = await imageStateManager.fileToBase64(initialImage);
+          const imageState = {
+            currentImage: initialImageBase64,
+            originalImage: initialImageBase64,
+            history: [initialImageBase64],
+            historyIndex: 0,
+            editHotspot: null,
+            activeTab: 'retouch' as Tab,
+            prompt: '',
+            sessionId,
+            userId
+          };
+          await imageStateManager.saveImageState(imageState);
+          console.log('✅ Backup state save completed for session:', sessionId);
+        } else {
+          console.log('✅ State already exists for session:', sessionId);
+        }
+      };
+      ensureStateSaved();
+    }
+  }, [initialImage, sessionId, history.length, historyIndex, userId]);
 
   const currentImage = history[historyIndex] ?? null;
   const originalImage = history[0] ?? null;
@@ -108,39 +194,89 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage }) => {
     }
   }, [originalImage]);
 
-  // Handle payment success redirect
+  // Handle payment success redirect and image restoration
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const paymentStatus = urlParams.get('payment');
-    const sessionId = urlParams.get('session_id');
+    const stripeSessionId = urlParams.get('session_id');
     const userIdFromUrl = urlParams.get('user_id');
-    
-    if (paymentStatus === 'success' && sessionId && userIdFromUrl === userId) {
-      console.log('🎉 Payment success detected:', sessionId);
-      setPaymentSuccess(sessionId);
-      
+
+    if (paymentStatus === 'success' && stripeSessionId && userIdFromUrl === userId) {
+      console.log('🎉 Payment success detected:', stripeSessionId);
+      console.log('📸 Current session ID:', sessionId);
+      setPaymentSuccess(stripeSessionId);
+
       // Refresh credits from backend
       getUserCredits(userId)
         .then(credits => {
           console.log('💳 Updated credits from backend:', credits);
           setCreditsRemaining(credits);
           secureStorage.setItem('creditsRemaining', credits, 1440);
+
+          // Restore image state using current session ID
+          const savedState = imageStateManager.restoreImageStateBySession(userId, sessionId);
+
+          if (savedState) {
+            console.log('🔄 Restoring image state after successful payment...');
+            try {
+              // Convert base64 back to File objects
+              const restoredHistory = savedState.history.map((base64, index) =>
+                imageStateManager.base64ToFile(base64, `restored-${index}.png`)
+              );
+
+              setHistory(restoredHistory);
+              setHistoryIndex(savedState.historyIndex);
+              setActiveTab(savedState.activeTab as Tab);
+              setPrompt(savedState.prompt || '');
+              setEditHotspot(savedState.editHotspot);
+
+              console.log('✅ Image state fully restored after payment');
+
+            } catch (restoreError) {
+              console.error('❌ Failed to restore image state:', restoreError);
+              setError('Images restored but there was an issue. You can continue editing.');
+            }
+          }
         })
         .catch(error => {
           console.error('Failed to refresh credits:', error);
         });
-        
+
       // Clean up URL parameters
       window.history.replaceState({}, document.title, window.location.pathname);
-      
+
       // Clear success message after 5 seconds
       setTimeout(() => setPaymentSuccess(null), 5000);
     } else if (paymentStatus === 'cancelled') {
       console.log('❌ Payment cancelled');
-      setError('Payment was cancelled. You can try again anytime.');
+
+      // Restore image state from current session
+      const savedState = imageStateManager.restoreImageStateBySession(userId, sessionId);
+
+      if (savedState) {
+        console.log('🔄 Restoring image state after cancelled payment...');
+        try {
+          const restoredHistory = savedState.history.map((base64, index) =>
+            imageStateManager.base64ToFile(base64, `restored-${index}.png`)
+          );
+
+          setHistory(restoredHistory);
+          setHistoryIndex(savedState.historyIndex);
+          setActiveTab(savedState.activeTab as Tab);
+          setPrompt(savedState.prompt || '');
+          setEditHotspot(savedState.editHotspot);
+
+          console.log('✅ Image state restored after payment cancellation');
+
+        } catch (restoreError) {
+          console.error('❌ Failed to restore image state:', restoreError);
+        }
+      }
+
+      setError('Payment was cancelled. Your image has been restored and you can try purchasing credits again.');
       window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, [userId]);
+  }, [userId, sessionId]);
 
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex < history.length - 1;
@@ -171,9 +307,9 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage }) => {
     const clickY = e.clientY - containerRect.top;
 
     // Set display hotspot using absolute positioning
-    setDisplayHotspot({ 
-      x: clickX, 
-      y: clickY 
+    setDisplayHotspot({
+      x: clickX,
+      y: clickY
     });
 
     // Calculate coordinates for API using image bounds
@@ -198,7 +334,7 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage }) => {
     }
 
     sessionManager.updateActivity();
-    
+
     if (!sessionManager.isSessionValid()) {
       sessionManager.clearSession();
       setError('Session expired. Please refresh the page.');
@@ -455,7 +591,7 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage }) => {
                     <p className="text-gray-300">AI is working its magic...</p>
                 </div>
             )}
-            
+
             {paymentSuccess && (
                 <div className="absolute top-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg z-40 animate-fade-in">
                     <p className="font-medium">🎉 Payment successful!</p>
@@ -521,16 +657,53 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage }) => {
                             {creditsRemaining <= 0 && (
                                 <button
                                     onClick={async () => {
+                                        // 1. Set loading state to provide user feedback
+                                        setIsPurchasing(true);
+                                        setError(null);
+
                                         try {
-                                            await purchaseCredits(userId, 50);
+                                            // 2. Prepare the image state for preservation. This is a critical async step.
+                                            let imageStateToSave: Omit<ImageState, 'timestamp'> | undefined = undefined;
+                                            if (history.length > 0) {
+                                                console.log(`📸 Preparing image state for preservation (session: ${sessionId})...`);
+                                                
+                                                // Convert all File objects in history to base64 strings
+                                                const historyBase64 = await Promise.all(
+                                                    history.map(file => imageStateManager.fileToBase64(file))
+                                                );
+                                                
+                                                imageStateToSave = {
+                                                    currentImage: historyBase64[historyIndex] || '',
+                                                    originalImage: historyBase64[0] || '',
+                                                    history: historyBase64,
+                                                    historyIndex,
+                                                    editHotspot,
+                                                    activeTab,
+                                                    prompt,
+                                                    sessionId,
+                                                    userId
+                                                };
+                                            }
+
+                                            // 3. Call the service. It now saves state internally and returns the URL.
+                                            const checkoutUrl = await purchaseCredits(userId, 50, imageStateToSave, sessionId);
+
+                                            // 4. If we get a URL, redirect the user. This only happens AFTER state is saved.
+                                            if (checkoutUrl) {
+                                                window.location.href = checkoutUrl;
+                                            }
+
                                         } catch (error) {
                                             console.error('Failed to start purchase:', error);
-                                            setError('Failed to start purchase. Please try again.');
+                                            setError(error instanceof Error ? error.message : 'Failed to start purchase. Please try again.');
+                                            setIsPurchasing(false); // Stop loading on error
                                         }
+                                        // No need for a `finally` block, as a successful redirect will unload the page.
                                     }}
-                                    className="bg-white text-black px-4 py-2 rounded text-sm font-medium hover:bg-gray-200 transition-colors"
+                                    disabled={isPurchasing || isLoading} // Disable while purchasing or doing other AI work
+                                    className="bg-white text-black px-4 py-2 rounded text-sm font-medium hover:bg-gray-200 transition-colors disabled:opacity-60 disabled:cursor-wait"
                                 >
-                                    Buy 50 Credits ($5)
+                                    {isPurchasing ? 'Redirecting...' : 'Buy 50 Credits ($5)'}
                                 </button>
                             )}
                         </div>
@@ -628,6 +801,8 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage }) => {
             </button>
         </div>
       </div>
+
+      <TestingPanel />
     </div>
   );
 };

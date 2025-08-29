@@ -1,5 +1,5 @@
-// Load environment variables FIRST
-require('dotenv').config();
+// Load environment variables FIRST - look in parent directory
+require('dotenv').config({ path: '../.env' });
 
 const express = require('express');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
@@ -9,10 +9,17 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // CORS configuration
+console.log('🔧 CORS configured for:', process.env.FRONTEND_URL || 'http://localhost:5173');
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true
 }));
+
+// Add request logging
+app.use((req, res, next) => {
+  console.log(`📨 ${req.method} ${req.path} - Origin: ${req.headers.origin || 'none'}`);
+  next();
+});
 
 // Middleware - IMPORTANT ORDER!
 // Webhook needs raw body, so it comes first
@@ -84,13 +91,27 @@ app.post('/api/user/:userId/add-credits', (req, res) => {
 // Create Stripe checkout session
 app.post('/api/create-checkout-session', async (req, res) => {
   try {
-    const { userId, credits = 50 } = req.body;
+    const { userId, credits = 50, sessionId } = req.body;
 
     if (!userId) {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
     const priceInCents = Math.round(credits * 10); // 10 cents per credit
+
+    // Build success URL with session ID in path
+    let successUrl, cancelUrl;
+    
+    if (sessionId) {
+      successUrl = `${process.env.FRONTEND_URL}/edit/${sessionId}?payment=success&session_id={CHECKOUT_SESSION_ID}&user_id=${userId}`;
+      cancelUrl = `${process.env.FRONTEND_URL}/edit/${sessionId}?payment=cancelled`;
+    } else {
+      // Fallback for purchases without active editing session
+      successUrl = `${process.env.FRONTEND_URL}/?payment=success&session_id={CHECKOUT_SESSION_ID}&user_id=${userId}`;
+      cancelUrl = `${process.env.FRONTEND_URL}/?payment=cancelled`;
+    }
+
+    console.log(`💳 Creating Stripe session for user ${userId}, ${credits} credits${sessionId ? `, editing session: ${sessionId}` : ''}`);
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -109,11 +130,12 @@ app.post('/api/create-checkout-session', async (req, res) => {
         },
       ],
       mode: 'payment',
-      success_url: `${process.env.FRONTEND_URL}/edit?payment=success&session_id={CHECKOUT_SESSION_ID}&user_id=${userId}`,
-      cancel_url: `${process.env.FRONTEND_URL}/edit?payment=cancelled`,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       metadata: {
         userId: userId,
-        credits: credits.toString()
+        credits: credits.toString(),
+        editingSession: sessionId || ''
       }
     });
 
