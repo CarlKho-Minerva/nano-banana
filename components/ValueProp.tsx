@@ -50,8 +50,8 @@ const ValueProp: React.FC = () => {
       <div className="w-full max-w-sm sm:max-w-md lg:max-w-lg mx-auto lg:mx-0">
         <div className="w-full aspect-[4/3] sm:aspect-[3/2] lg:aspect-[4/3] border border-white/20 rounded-xl lg:rounded-2xl overflow-hidden shadow-2xl">
           <BeforeAfter
-            beforeSrc={demos[currentDemo].before}
-            afterSrc={demos[currentDemo].after}
+            beforeSrc={demos[currentDemo].after}
+            afterSrc={demos[currentDemo].before}
             alt={demos[currentDemo].description}
           />
         </div>
