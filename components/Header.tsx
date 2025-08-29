@@ -16,7 +16,7 @@ const Header: React.FC = () => {
       <div className="flex items-center justify-center gap-3">
           <SparkleIcon className="w-6 h-6 text-white" />
           <h1 className="text-xl font-bold tracking-tight text-white">
-            NanoBanana
+            Magic Eraser for All Your Photos
           </h1>
       </div>
     </header>

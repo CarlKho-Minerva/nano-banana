@@ -9,7 +9,6 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // CORS configuration
-console.log('🔧 CORS configured for:', process.env.FRONTEND_URL || 'http://localhost:5173');
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true
@@ -17,7 +16,6 @@ app.use(cors({
 
 // Add request logging
 app.use((req, res, next) => {
-  console.log(`📨 ${req.method} ${req.path} - Origin: ${req.headers.origin || 'none'}`);
   next();
 });
 
@@ -77,7 +75,6 @@ app.post('/api/user/:userId/add-credits', (req, res) => {
     const user = getUser(userId);
     user.credits += credits;
     
-    console.log(`Manually added ${credits} credits to user ${userId}. Total: ${user.credits}`);
     res.json({ 
       message: `Added ${credits} credits`, 
       totalCredits: user.credits 
@@ -111,7 +108,6 @@ app.post('/api/create-checkout-session', async (req, res) => {
       cancelUrl = `${process.env.FRONTEND_URL}/?payment=cancelled`;
     }
 
-    console.log(`💳 Creating Stripe session for user ${userId}, ${credits} credits${sessionId ? `, editing session: ${sessionId}` : ''}`);
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -139,7 +135,6 @@ app.post('/api/create-checkout-session', async (req, res) => {
       }
     });
 
-    console.log(`Created checkout session for user ${userId}: ${session.id}`);
     res.json({
       sessionId: session.id,
       url: session.url
@@ -158,7 +153,6 @@ app.post('/webhook', (req, res) => {
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
   } catch (err) {
-    console.log(`Webhook signature verification failed:`, err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
@@ -169,7 +163,6 @@ app.post('/webhook', (req, res) => {
       const userId = session.metadata.userId;
       const credits = parseInt(session.metadata.credits);
 
-      console.log(`Payment successful for user ${userId}: +${credits} credits`);
 
       // Add credits to user account
       const user = getUser(userId);
@@ -181,15 +174,12 @@ app.post('/webhook', (req, res) => {
         timestamp: new Date()
       });
 
-      console.log(`User ${userId} now has ${user.credits} credits`);
       break;
 
     case 'payment_intent.succeeded':
-      console.log('Payment succeeded:', event.data.object.id);
       break;
 
     default:
-      console.log(`Unhandled event type: ${event.type}`);
   }
 
   res.json({received: true});
@@ -212,7 +202,6 @@ app.post('/api/gemini/edit', async (req, res) => {
 
     // TODO: Implement actual Gemini API call here
     // For now, return a mock response
-    console.log(`User ${userId} requesting image edit. Credits: ${user.credits}`);
 
     // Deduct credit
     user.credits -= 1;
@@ -259,14 +248,9 @@ app.use((err, req, res, next) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`💳 Environment: ${process.env.NODE_ENV || 'development'}`);
 
   if (!process.env.STRIPE_SECRET_KEY) {
-    console.warn('⚠️  WARNING: STRIPE_SECRET_KEY not found in environment variables');
   }
   if (!process.env.STRIPE_WEBHOOK_SECRET) {
-    console.warn('⚠️  WARNING: STRIPE_WEBHOOK_SECRET not found. Webhooks will not work.');
   }
 });

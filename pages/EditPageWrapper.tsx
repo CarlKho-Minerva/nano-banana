@@ -34,14 +34,12 @@ const EditPageWrapper: React.FC = () => {
 
   useEffect(() => {
     const loadEditSession = async () => {
-      console.log('🔧 EditPageWrapper loading...', { urlSessionId, locationState: location.state });
       
       // Check for uploaded file in router state (new image upload)
       const state = location.state as { uploadedFile?: File } | null;
       
       if (state?.uploadedFile && urlSessionId) {
         // NEW IMAGE UPLOAD with session ID from URL
-        console.log('🔧 New image upload for session:', urlSessionId);
         setInitialImage(state.uploadedFile);
         setSessionId(urlSessionId);
         
@@ -49,19 +47,16 @@ const EditPageWrapper: React.FC = () => {
         
       } else if (urlSessionId) {
         // EXISTING SESSION - try to restore from URL
-        console.log('🔧 Existing session from URL:', urlSessionId);
         setSessionId(urlSessionId);
         
         // Try to restore image state from storage using the stable getUserId
         const { getUserId } = await import('../services/stripeService');
         const { imageStateManager } = await import('../utils/security');
         const stableUserId = getUserId(); // Use the stable function
-        console.log('🔑 Using stable User ID for restoration:', stableUserId);
         
         const restoredState = imageStateManager.restoreImageStateBySession(stableUserId, urlSessionId);
         
         if (restoredState) {
-          console.log('✅ Restored image state for session:', urlSessionId);
           // Convert base64 back to File
           const restoredFile = imageStateManager.base64ToFile(
             restoredState.currentImage, 
@@ -69,14 +64,12 @@ const EditPageWrapper: React.FC = () => {
           );
           setInitialImage(restoredFile);
         } else {
-          console.log('❌ No valid image state found for this session:', urlSessionId, 'and user:', stableUserId);
           // Don't redirect immediately. This might be a fresh load after payment.
           // The EditPage component itself will handle the final redirect if needed after its own checks.
         }
         
       } else {
         // NO SESSION ID AND NO NEW IMAGE - redirect to home
-        console.log('🔧 No session ID or new image, redirecting to home');
         navigate('/');
         return;
       }

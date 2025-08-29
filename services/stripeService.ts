@@ -6,9 +6,9 @@
 import { loadStripe } from '@stripe/stripe-js';
 import { imageStateManager, type ImageState } from '../utils/security';
 
-// Replace with your actual publishable key from Stripe Dashboard
-const STRIPE_PUBLISHABLE_KEY = 'pk_test_51PaXLV2KefGXrZX2IqX3cNM7iJEfkkBN0rAquVGFtO9YG0PIwB8aCMut5OHrKVFVze82LSf8OQKKHvQYYzSol72H00EDRX0L05';
-const BACKEND_URL = 'http://localhost:3001';
+// Use environment variables for production deployment
+const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_51PaXLV2KefGXrZX2IqX3cNM7iJEfkkBN0rAquVGFtO9YG0PIwB8aCMut5OHrKVFVze82LSf8OQKKHvQYYzSol72H00EDRX0L05';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
 // Initialize Stripe
 const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
@@ -27,13 +27,11 @@ export const purchaseCredits = async (
   try {
     // Save image state before creating the session. This is the critical first step.
     if (imageState) {
-      console.log('💾 Preserving image state before payment...');
       const saveSuccess = await imageStateManager.saveImageState(imageState);
       if (!saveSuccess) {
         // If saving fails, we should not proceed to payment to avoid data loss.
         throw new Error('Could not save your current editing session. Please try again.');
       }
-      console.log('✅ Image state preserved successfully.');
     }
 
     const response = await fetch(`${BACKEND_URL}/api/create-checkout-session`, {
@@ -59,7 +57,6 @@ export const purchaseCredits = async (
         throw new Error('Backend did not return a checkout URL.');
     }
 
-    console.log('✅ Checkout session created. URL received.');
     return url; // Return the URL for the component to handle redirection.
 
   } catch (error) {
@@ -175,7 +172,6 @@ export const getUserId = (): string => {
   if (!userId) {
     userId = `user_${Math.random().toString(36).substring(2)}_${Date.now().toString(36)}`;
     localStorage.setItem(USER_ID_KEY, userId);
-    console.log('🔑 New User ID generated:', userId);
   }
   
   return userId;

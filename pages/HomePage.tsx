@@ -27,7 +27,6 @@ const HomePage: React.FC = () => {
       const restoredState = imageStateManager.restoreLatestImageState(userId);
       
       if (restoredState) {
-        console.log('🔄 Found preserved image state on home page, session:', restoredState.sessionId);
         
         // Show a brief notification and auto-redirect to specific session
         const notification = document.createElement('div');
@@ -57,14 +56,11 @@ const HomePage: React.FC = () => {
   }, [navigate]);
 
   const handleFileSelect = (files: FileList | null) => {
-    console.log('🔧 HomePage handleFileSelect called with:', files);
     if (files && files[0]) {
       const file = files[0];
-      console.log('🔧 Selected file:', file.name, file.size);
 
       // Generate unique session ID for new upload
       const newSessionId = `session_${Math.random().toString(36).substring(2)}_${Date.now().toString(36)}`;
-      console.log('🔧 Generated session ID:', newSessionId);
 
       // Navigate to session-based URL with file data in state
       navigate(`/edit/${newSessionId}`, {
@@ -73,7 +69,6 @@ const HomePage: React.FC = () => {
         }
       });
     } else {
-      console.log('🔧 No file selected');
     }
   };
 

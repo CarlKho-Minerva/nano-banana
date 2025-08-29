@@ -41,8 +41,7 @@ const handleApiResponse = (
 
     if (imagePartFromResponse?.inlineData) {
         const { mimeType, data } = imagePartFromResponse.inlineData;
-        console.log(`Received image data (${mimeType}) for ${context}`);
-        return `data:${mimeType};base64,${data}`;
+            return `data:${mimeType};base64,${data}`;
     }
 
     // 3. If no image, check for other reasons
@@ -75,7 +74,6 @@ export const generateEditedImage = async (
     userPrompt: string,
     hotspot: { x: number, y: number }
 ): Promise<string> => {
-    console.log('Starting generative edit at:', hotspot);
     const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY! });
     
     const originalImagePart = await fileToPart(originalImage);
@@ -94,12 +92,10 @@ Safety & Ethics Policy:
 Output: Return ONLY the final edited image. Do not return text.`;
     const textPart = { text: prompt };
 
-    console.log('Sending image and prompt to the model...');
     const response: GenerateContentResponse = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image-preview',
         contents: { parts: [originalImagePart, textPart] },
     });
-    console.log('Received response from model.', response);
 
     return handleApiResponse(response, 'edit');
 };
@@ -114,7 +110,6 @@ export const generateFilteredImage = async (
     originalImage: File,
     filterPrompt: string,
 ): Promise<string> => {
-    console.log(`Starting filter generation: ${filterPrompt}`);
     const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY! });
     
     const originalImagePart = await fileToPart(originalImage);
@@ -128,12 +123,10 @@ Safety & Ethics Policy:
 Output: Return ONLY the final filtered image. Do not return text.`;
     const textPart = { text: prompt };
 
-    console.log('Sending image and filter prompt to the model...');
     const response: GenerateContentResponse = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image-preview',
         contents: { parts: [originalImagePart, textPart] },
     });
-    console.log('Received response from model for filter.', response);
     
     return handleApiResponse(response, 'filter');
 };
@@ -148,7 +141,6 @@ export const generateAdjustedImage = async (
     originalImage: File,
     adjustmentPrompt: string,
 ): Promise<string> => {
-    console.log(`Starting global adjustment generation: ${adjustmentPrompt}`);
     const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY! });
     
     const originalImagePart = await fileToPart(originalImage);
@@ -166,12 +158,10 @@ Safety & Ethics Policy:
 Output: Return ONLY the final adjusted image. Do not return text.`;
     const textPart = { text: prompt };
 
-    console.log('Sending image and adjustment prompt to the model...');
     const response: GenerateContentResponse = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image-preview',
         contents: { parts: [originalImagePart, textPart] },
     });
-    console.log('Received response from model for adjustment.', response);
     
     return handleApiResponse(response, 'adjustment');
 };

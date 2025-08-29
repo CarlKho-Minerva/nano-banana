@@ -197,7 +197,6 @@ export const secureStorage = {
       const obfuscated = simpleObfuscate(JSON.stringify(data));
       localStorage.setItem(`nb_${key}`, obfuscated);
     } catch (error) {
-      console.warn('Failed to store data securely:', error);
     }
   },
   
@@ -219,7 +218,6 @@ export const secureStorage = {
       
       return data.value;
     } catch (error) {
-      console.warn('Failed to retrieve data securely:', error);
       // Clean up corrupted data
       localStorage.removeItem(`nb_${key}`);
       return null;
@@ -323,7 +321,6 @@ export const imageStateManager = {
   // Save image state before payment redirect
   saveImageState: async (imageState: Omit<ImageState, 'timestamp'>): Promise<boolean> => {
     try {
-      console.log(`💾 Saving image state for session ${imageState.sessionId}...`);
       
       // Compress images to reduce storage footprint
       const compressedState: ImageState = {
@@ -338,7 +335,6 @@ export const imageStateManager = {
       
       // Calculate storage size
       const stateSize = JSON.stringify(compressedState).length;
-      console.log(`📊 Image state size: ${(stateSize / 1024).toFixed(1)}KB`);
       
       // Use session-based key for storage
       const storageKey = `imageState_${imageState.userId}_${imageState.sessionId}`;
@@ -346,7 +342,6 @@ export const imageStateManager = {
       // Check localStorage capacity (approximate 5MB limit)
       const maxSize = 4 * 1024 * 1024; // 4MB to be safe
       if (stateSize > maxSize) {
-        console.warn('⚠️ Image state too large, using lower quality compression');
         
         // Try with lower quality compression
         const lowerQualityState = {
@@ -366,7 +361,6 @@ export const imageStateManager = {
       // Also save a reference to the latest session for this user
       secureStorage.setItem(`latestSession_${imageState.userId}`, imageState.sessionId, 480); // 8 hours expiry
       
-      console.log('✅ Image state saved successfully');
       return true;
     } catch (error) {
       console.error('❌ Failed to save image state:', error);
@@ -377,16 +371,13 @@ export const imageStateManager = {
   // Restore image state by session ID
   restoreImageStateBySession: (userId: string, sessionId: string): ImageState | null => {
     try {
-      console.log(`🔄 Attempting to restore state for session ${sessionId}...`);
       const storageKey = `imageState_${userId}_${sessionId}`;
       const state = secureStorage.getItem(storageKey);
       
       if (state && imageStateManager.validateImageState(state)) {
-        console.log('✅ Image state restored successfully');
         return state;
       }
       
-      console.log('ℹ️ No valid image state found for this session');
       return null;
     } catch (error) {
       console.error('❌ Failed to restore image state:', error);
@@ -397,7 +388,6 @@ export const imageStateManager = {
   // Restore latest image state for user (fallback)
   restoreLatestImageState: (userId: string): ImageState | null => {
     try {
-      console.log(`🔄 Attempting to restore latest state for user ${userId}...`);
       
       // Get the latest session ID for this user
       const latestSessionId = secureStorage.getItem(`latestSession_${userId}`);
@@ -406,7 +396,6 @@ export const imageStateManager = {
         return imageStateManager.restoreImageStateBySession(userId, latestSessionId);
       }
       
-      console.log('ℹ️ No latest session found for user');
       return null;
     } catch (error) {
       console.error('❌ Failed to restore latest image state:', error);
@@ -417,15 +406,12 @@ export const imageStateManager = {
   // Legacy method for backward compatibility
   restoreImageState: (): ImageState | null => {
     try {
-      console.log('🔄 Attempting to restore image state (legacy)...');
       const state = secureStorage.getItem('imageState');
       
       if (state && imageStateManager.validateImageState(state)) {
-        console.log('✅ Legacy image state restored successfully');
         return state;
       }
       
-      console.log('ℹ️ No valid legacy image state found');
       return null;
     } catch (error) {
       console.error('❌ Failed to restore legacy image state:', error);
@@ -440,11 +426,9 @@ export const imageStateManager = {
         const storageKey = `imageState_${userId}_${sessionId}`;
         secureStorage.removeItem(storageKey);
         secureStorage.removeItem(`latestSession_${userId}`);
-        console.log(`🧹 Image state cleared for session ${sessionId}`);
       } else {
         // Legacy cleanup
         secureStorage.removeItem('imageState');
-        console.log('🧹 Legacy image state cleared');
       }
     } catch (error) {
       console.error('❌ Failed to clear image state:', error);
@@ -476,7 +460,6 @@ export const imageStateManager = {
       });
       
       if (cleaned > 0) {
-        console.log(`🧹 Cleaned ${cleaned} expired sessions for user ${userId}`);
       }
     } catch (error) {
       console.error('❌ Failed to clean expired sessions:', error);
@@ -496,21 +479,18 @@ export const imageStateManager = {
     const hasLegacyRequired = legacyRequired.every(key => key in state);
     
     if (!hasNewRequired && !hasLegacyRequired) {
-      console.log('❌ State missing required fields');
       return false;
     }
     
     // Validate base64 format
     const base64Regex = /^data:image\/(jpeg|jpg|png|webp);base64,/;
     if (!base64Regex.test(state.currentImage) || !base64Regex.test(state.originalImage)) {
-      console.log('❌ Invalid base64 image format');
       return false;
     }
     
     // Check if state is too old (older than 2 hours)
     const twoHours = 2 * 60 * 60 * 1000;
     if (Date.now() - state.timestamp > twoHours) {
-      console.log('⏰ Image state expired');
       return false;
     }
     

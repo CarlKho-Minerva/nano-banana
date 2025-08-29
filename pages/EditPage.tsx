@@ -85,30 +85,23 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage, sessionId: propSessio
     if (import.meta.env.DEV) {
       (window as any).imageStateManager = imageStateManager;
       (window as any).debugStorage = () => {
-        console.log('🔍 localStorage contents:');
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i);
           if (key?.includes('imageState') || key?.includes('latestSession')) {
-            console.log(`${key}:`, localStorage.getItem(key));
           }
         }
       };
-      console.log('🔧 imageStateManager available globally for testing');
-      console.log('🔧 Run debugStorage() to see localStorage contents');
-      console.log(`🆔 Current session ID: ${sessionId}`);
     }
   }, [sessionId]);
 
   // Save initial image state for new uploads and clean up expired sessions
   useEffect(() => {
-    console.log('🔄 Initializing edit session...', { initialImage: !!initialImage, sessionId, historyLength: history.length });
 
     // Clean up expired sessions first
     imageStateManager.cleanExpiredSessions(userId);
 
     // For new uploads, save initial state immediately
     if (initialImage && sessionId && history.length > 0) {
-      console.log('💾 Saving initial state for new upload session:', sessionId);
       const saveInitialState = async () => {
         try {
           const initialImageBase64 = await imageStateManager.fileToBase64(initialImage);
@@ -125,9 +118,7 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage, sessionId: propSessio
           };
 
           await imageStateManager.saveImageState(imageState);
-          console.log('✅ Initial state saved for session:', sessionId);
         } catch (error) {
-          console.error('❌ Failed to save initial state:', error);
         }
       };
 
@@ -138,12 +129,10 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage, sessionId: propSessio
   // Additional useEffect to save state when history gets populated (backup)
   useEffect(() => {
     if (initialImage && sessionId && history.length > 0 && historyIndex === 0 && history[0] === initialImage) {
-      console.log('🔄 History populated, ensuring state is saved for session:', sessionId);
       const ensureStateSaved = async () => {
         // Check if state already exists
         const existing = imageStateManager.restoreImageStateBySession(userId, sessionId);
         if (!existing) {
-          console.log('💾 State missing, saving now for session:', sessionId);
           const initialImageBase64 = await imageStateManager.fileToBase64(initialImage);
           const imageState = {
             currentImage: initialImageBase64,
@@ -157,9 +146,7 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage, sessionId: propSessio
             userId
           };
           await imageStateManager.saveImageState(imageState);
-          console.log('✅ Backup state save completed for session:', sessionId);
         } else {
-          console.log('✅ State already exists for session:', sessionId);
         }
       };
       ensureStateSaved();
@@ -202,14 +189,11 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage, sessionId: propSessio
     const userIdFromUrl = urlParams.get('user_id');
 
     if (paymentStatus === 'success' && stripeSessionId && userIdFromUrl === userId) {
-      console.log('🎉 Payment success detected:', stripeSessionId);
-      console.log('📸 Current session ID:', sessionId);
       setPaymentSuccess(stripeSessionId);
 
       // Refresh credits from backend
       getUserCredits(userId)
         .then(credits => {
-          console.log('💳 Updated credits from backend:', credits);
           setCreditsRemaining(credits);
           secureStorage.setItem('creditsRemaining', credits, 1440);
 
@@ -217,7 +201,6 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage, sessionId: propSessio
           const savedState = imageStateManager.restoreImageStateBySession(userId, sessionId);
 
           if (savedState) {
-            console.log('🔄 Restoring image state after successful payment...');
             try {
               // Convert base64 back to File objects
               const restoredHistory = savedState.history.map((base64, index) =>
@@ -230,16 +213,13 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage, sessionId: propSessio
               setPrompt(savedState.prompt || '');
               setEditHotspot(savedState.editHotspot);
 
-              console.log('✅ Image state fully restored after payment');
 
             } catch (restoreError) {
-              console.error('❌ Failed to restore image state:', restoreError);
               setError('Images restored but there was an issue. You can continue editing.');
             }
           }
         })
         .catch(error => {
-          console.error('Failed to refresh credits:', error);
         });
 
       // Clean up URL parameters
@@ -248,13 +228,11 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage, sessionId: propSessio
       // Clear success message after 5 seconds
       setTimeout(() => setPaymentSuccess(null), 5000);
     } else if (paymentStatus === 'cancelled') {
-      console.log('❌ Payment cancelled');
 
       // Restore image state from current session
       const savedState = imageStateManager.restoreImageStateBySession(userId, sessionId);
 
       if (savedState) {
-        console.log('🔄 Restoring image state after cancelled payment...');
         try {
           const restoredHistory = savedState.history.map((base64, index) =>
             imageStateManager.base64ToFile(base64, `restored-${index}.png`)
@@ -266,10 +244,8 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage, sessionId: propSessio
           setPrompt(savedState.prompt || '');
           setEditHotspot(savedState.editHotspot);
 
-          console.log('✅ Image state restored after payment cancellation');
 
         } catch (restoreError) {
-          console.error('❌ Failed to restore image state:', restoreError);
         }
       }
 
@@ -380,7 +356,6 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage, sessionId: propSessio
     } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
         setError(`Failed to generate the image. ${errorMessage}`);
-        console.error(err);
     } finally {
         setIsLoading(false);
     }
@@ -403,7 +378,6 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage, sessionId: propSessio
     } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
         setError(`Failed to apply the filter. ${errorMessage}`);
-        console.error(err);
     } finally {
         setIsLoading(false);
     }
@@ -425,7 +399,6 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage, sessionId: propSessio
     } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
         setError(`Failed to apply the adjustment. ${errorMessage}`);
-        console.error(err);
     } finally {
         setIsLoading(false);
     }
@@ -665,7 +638,6 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage, sessionId: propSessio
                                             // 2. Prepare the image state for preservation. This is a critical async step.
                                             let imageStateToSave: Omit<ImageState, 'timestamp'> | undefined = undefined;
                                             if (history.length > 0) {
-                                                console.log(`📸 Preparing image state for preservation (session: ${sessionId})...`);
                                                 
                                                 // Convert all File objects in history to base64 strings
                                                 const historyBase64 = await Promise.all(
@@ -694,7 +666,6 @@ const EditPage: React.FC<EditPageProps> = ({ initialImage, sessionId: propSessio
                                             }
 
                                         } catch (error) {
-                                            console.error('Failed to start purchase:', error);
                                             setError(error instanceof Error ? error.message : 'Failed to start purchase. Please try again.');
                                             setIsPurchasing(false); // Stop loading on error
                                         }
