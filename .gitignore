@@ -36,5 +36,7 @@ lerna-debug.log*
 *.sw?
 
 # OS generated files
-Thumbs.db.env
-.env
+Thumbs.db
+
+# Development documentation
+dev-docs/

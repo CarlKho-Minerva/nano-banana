@@ -9,7 +9,13 @@
       "Bash(node server.js)",
       "Bash(pkill:*)",
       "Bash(lsof:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(for file in *.md)",
+      "Bash(do if [ \"$file\" != \"README.md\" ])",
+      "Bash([ -f \"$file\" ])",
+      "Bash(then mv \"$file\" dev-docs/)",
+      "Bash(fi)",
+      "Bash(done)"
     ],
     "additionalDirectories": [
       "/Users/cvk/Downloads"
