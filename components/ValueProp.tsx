@@ -11,28 +11,28 @@ const ValueProp: React.FC = () => {
 
   const demos = [
     {
-      before: '/assets/before-after/1/before_-__alicia-steels-5AxRCxe_fa0-unsplash.jpg',
-      after: '/assets/before-after/1/after_-__alicia-steels-5AxRCxe_fa0-unsplash.jpeg',
+      before: 'https://raw.githubusercontent.com/CarlKho-Minerva/nano-banana/57f3661e8b32b64ada2a8c13a47d4cfea335e9bc/public/assets/before-after/1/before_-__alicia-steels-5AxRCxe_fa0-unsplash.jpg',
+      after: 'https://raw.githubusercontent.com/CarlKho-Minerva/nano-banana/57f3661e8b32b64ada2a8c13a47d4cfea335e9bc/public/assets/before-after/1/after_-__alicia-steels-5AxRCxe_fa0-unsplash.jpeg',
       description: 'Remove unwanted objects'
     },
     {
-      before: '/assets/before-after/2/before_-_gabriella-clare-marino-PLlgbMBbmHU-unsplash.jpg',
-      after: '/assets/before-after/2/after_-_gabriella-clare-marino-PLlgbMBbmHU-unsplash.jpeg',
+      before: 'https://raw.githubusercontent.com/CarlKho-Minerva/nano-banana/57f3661e8b32b64ada2a8c13a47d4cfea335e9bc/public/assets/before-after/2/before_-_gabriella-clare-marino-PLlgbMBbmHU-unsplash.jpg',
+      after: 'https://raw.githubusercontent.com/CarlKho-Minerva/nano-banana/57f3661e8b32b64ada2a8c13a47d4cfea335e9bc/public/assets/before-after/2/after_-_gabriella-clare-marino-PLlgbMBbmHU-unsplash.jpeg',
       description: 'Clean up backgrounds'
     },
     {
-      before: '/assets/before-after/3/before_-_zachary-kadolph-Hl_o1K6OPsA-unsplash.jpg',
-      after: '/assets/before-after/3/after_-_zachary-kadolph-Hl_o1K6OPsA-unsplash.png',
+      before: 'https://raw.githubusercontent.com/CarlKho-Minerva/nano-banana/57f3661e8b32b64ada2a8c13a47d4cfea335e9bc/public/assets/before-after/3/before_-_zachary-kadolph-Hl_o1K6OPsA-unsplash.jpg',
+      after: 'https://raw.githubusercontent.com/CarlKho-Minerva/nano-banana/57f3661e8b32b64ada2a8c13a47d4cfea335e9bc/public/assets/before-after/3/after_-_zachary-kadolph-Hl_o1K6OPsA-unsplash.png',
       description: 'Perfect your shots'
     },
     {
-      before: '/assets/before-after/4/before_-_clayton-cardinalli-mMnU-UMmXok-unsplash.jpg',
-      after: '/assets/before-after/4/after_-_clayton-cardinalli-mMnU-UMmXok-unsplash.jpeg',
+      before: 'https://raw.githubusercontent.com/CarlKho-Minerva/nano-banana/57f3661e8b32b64ada2a8c13a47d4cfea335e9bc/public/assets/before-after/4/before_-_clayton-cardinalli-mMnU-UMmXok-unsplash.jpg',
+      after: 'https://raw.githubusercontent.com/CarlKho-Minerva/nano-banana/57f3661e8b32b64ada2a8c13a47d4cfea335e9bc/public/assets/before-after/4/after_-_clayton-cardinalli-mMnU-UMmXok-unsplash.jpeg',
       description: 'Enhance details'
     },
     {
-      before: '/assets/before-after/5/before_-_ksama-u35PU4Peo_8-unsplash.jpg',
-      after: '/assets/before-after/5/after_-_ksama-u35PU4Peo_8-unsplash.jpeg',
+      before: 'https://raw.githubusercontent.com/CarlKho-Minerva/nano-banana/57f3661e8b32b64ada2a8c13a47d4cfea335e9bc/public/assets/before-after/5/before_-_ksama-u35PU4Peo_8-unsplash.jpg',
+      after: 'https://raw.githubusercontent.com/CarlKho-Minerva/nano-banana/57f3661e8b32b64ada2a8c13a47d4cfea335e9bc/public/assets/before-after/5/after_-_ksama-u35PU4Peo_8-unsplash.jpeg',
       description: 'Transform scenes'
     }
   ];
