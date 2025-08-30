@@ -185,6 +185,31 @@ app.post('/webhook', (req, res) => {
   res.json({received: true});
 });
 
+// Helper function to process Gemini API calls
+const processGeminiRequest = async (userId, image, prompt, hotspot, type) => {
+  // Check user credits
+  const user = getUser(userId);
+  if (user.credits <= 0) {
+    throw new Error('Insufficient credits');
+  }
+
+  // TODO: Implement actual Gemini API call here
+  // For now, return a mock response but deduct credits
+
+  // Deduct credit
+  user.credits -= 1;
+
+  // Mock successful response (replace with actual Gemini API call)
+  // For now, return the original image back as base64
+  const mockEditedImage = image; // Return original image for now
+
+  return {
+    success: true,
+    editedImage: mockEditedImage,
+    creditsRemaining: user.credits
+  };
+};
+
 // Proxy endpoint for Gemini API calls (secure)
 app.post('/api/gemini/edit', async (req, res) => {
   try {
@@ -194,29 +219,47 @@ app.post('/api/gemini/edit', async (req, res) => {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
-    // Check user credits
-    const user = getUser(userId);
-    if (user.credits <= 0) {
-      return res.status(402).json({ error: 'Insufficient credits' });
-    }
-
-    // TODO: Implement actual Gemini API call here
-    // For now, return a mock response
-
-    // Deduct credit
-    user.credits -= 1;
-
-    // Mock successful response (replace with actual Gemini API call)
-    const mockEditedImage = `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==`;
-
-    res.json({
-      success: true,
-      editedImage: mockEditedImage,
-      creditsRemaining: user.credits
-    });
+    const result = await processGeminiRequest(userId, image, prompt, hotspot, 'edit');
+    res.json(result);
 
   } catch (error) {
-    console.error('Error processing Gemini API call:', error);
+    console.error('Error processing Gemini edit:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Filter endpoint
+app.post('/api/gemini/filter', async (req, res) => {
+  try {
+    const { userId, image, prompt } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    const result = await processGeminiRequest(userId, image, prompt, null, 'filter');
+    res.json(result);
+
+  } catch (error) {
+    console.error('Error processing Gemini filter:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Adjustment endpoint
+app.post('/api/gemini/adjust', async (req, res) => {
+  try {
+    const { userId, image, prompt } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    const result = await processGeminiRequest(userId, image, prompt, null, 'adjustment');
+    res.json(result);
+
+  } catch (error) {
+    console.error('Error processing Gemini adjustment:', error);
     res.status(500).json({ error: error.message });
   }
 });

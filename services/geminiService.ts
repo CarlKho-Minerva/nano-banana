@@ -8,6 +8,9 @@
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
+// Import getUserId function
+import { getUserId } from './stripeService';
+
 // Helper function to convert File to base64
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -40,6 +43,7 @@ export const generateEditedImage = async (
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
+                userId: getUserId(),
                 image: imageBase64,
                 prompt: userPrompt,
                 hotspot,
@@ -80,6 +84,7 @@ export const generateFilteredImage = async (
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
+                userId: getUserId(),
                 image: imageBase64,
                 prompt: filterPrompt,
                 type: 'filter'
@@ -119,6 +124,7 @@ export const generateAdjustedImage = async (
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
+                userId: getUserId(),
                 image: imageBase64,
                 prompt: adjustmentPrompt,
                 type: 'adjustment'

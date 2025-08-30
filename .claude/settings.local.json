@@ -15,7 +15,8 @@
       "Bash([ -f \"$file\" ])",
       "Bash(then mv \"$file\" dev-docs/)",
       "Bash(fi)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(npm start)"
     ],
     "additionalDirectories": [
       "/Users/cvk/Downloads"
